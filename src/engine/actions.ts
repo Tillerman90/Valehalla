@@ -2,11 +2,12 @@
 // game time, so the caller advances the world to "now" first.
 
 import { buildBlocker, findCity, placeOrder, startNextBuild } from './build';
+import { storageCap, tradeRate } from './content';
 import { settleAll } from './economy';
 import { removeEvents } from './events';
 import { runPlan } from './plan';
 import { RESOURCES } from './types';
-import type { ActionFailure, ActionResult, BuildingId, GameState, PlanId } from './types';
+import type { ActionFailure, ActionResult, BuildingId, City, GameState, PlanId, ResourceId } from './types';
 
 const fail = (reason: ActionFailure): ActionResult => ({ ok: false, reason });
 const OK: ActionResult = { ok: true };
@@ -56,6 +57,34 @@ export function setPlan(state: GameState, cityId: number, plan: PlanId | null): 
   const now = state.clock.gameTime;
   settleAll(state, now);
   city.plan = plan;
+  runPlan(state, city, now);
+  return OK;
+}
+
+/** What a trade of this size would bring in, at this city's Market. */
+export function tradeReturn(city: City, amount: number): number {
+  return Math.floor(amount * tradeRate(city.levels.market, city.traits.includes('crossroads')));
+}
+
+/**
+ * Swap some of one resource for another at the Market. Part of what is given
+ * is lost, less of it at a bigger Market. A trade that would not fit in the
+ * Storehouse is refused rather than wasted.
+ */
+export function trade(state: GameState, cityId: number, give: ResourceId, get: ResourceId, amount: number): ActionResult {
+  const city = findCity(state, cityId);
+  if (!city) return fail('no-such-city');
+  if (city.levels.market <= 0) return fail('no-market');
+  if (give === get || !Number.isInteger(amount) || amount <= 0) return fail('invalid-trade');
+  const now = state.clock.gameTime;
+  settleAll(state, now);
+  if (amount > city.resources[give]) return fail('cannot-afford');
+  const received = tradeReturn(city, amount);
+  if (received <= 0) return fail('invalid-trade');
+  if (city.resources[get] + received > storageCap(city.levels.storehouse)) return fail('no-room');
+  city.resources[give] -= amount;
+  city.resources[get] += received;
+  // The plan may now be able to afford what it was waiting for.
   runPlan(state, city, now);
   return OK;
 }

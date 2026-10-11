@@ -13,12 +13,13 @@ import {
   PLAN_DEFS,
   RESOURCES,
   TRAIT_NAMES,
+  TRAIT_SUMMARY,
   buildBlocker,
   buildDurationMs,
   cancelBuild,
   cityRates,
   nextTargetLevel,
-  populationCap,
+  cityPopulationCap,
   populationForLevel,
   populationUsed,
   queueBuild,
@@ -26,6 +27,9 @@ import {
   setPlan,
   storageCap,
   timeToAfford,
+  trade,
+  tradeRate,
+  tradeReturn,
   upgradeCost,
   wallTimeOf,
 } from '../engine';
@@ -56,7 +60,7 @@ function remember(key: string, value: string): void {
 type Tone = 'good' | 'bad';
 type Notify = (text: string, tone?: Tone) => void;
 
-const RESOURCE_NAMES: Record<ResourceId, string> = { food: 'Food', timber: 'Timber', metal: 'Metal', wealth: 'Wealth' };
+const RESOURCE_NAMES: Record<ResourceId, string> = { timber: 'Timber', stone: 'Stone', metal: 'Metal' };
 
 function Section({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
   return (
@@ -111,16 +115,14 @@ function costText(cost: Resources, city: City): ReactNode {
 }
 
 const RESOURCE_TEXT: Record<ResourceId, string> = {
-  food: 'text-food',
   timber: 'text-timber',
+  stone: 'text-stone',
   metal: 'text-metal',
-  wealth: 'text-wealth',
 };
 const RESOURCE_FILL: Record<ResourceId, string> = {
-  food: 'bg-food',
   timber: 'bg-timber',
+  stone: 'bg-stone',
   metal: 'bg-metal',
-  wealth: 'bg-wealth',
 };
 
 function ResourceStrip({ state, city }: { state: GameState; city: City }) {
@@ -128,7 +130,7 @@ function ResourceStrip({ state, city }: { state: GameState; city: City }) {
   const cap = storageCap(city.levels.storehouse);
   return (
     <div className="shrink-0 border-b border-line bg-deep px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {RESOURCES.map((r) => {
           const full = city.resources[r] >= cap;
           return (
@@ -589,10 +591,95 @@ function InstallHint() {
   );
 }
 
+/** Swap one resource for another. Only shown once the city has a Market. */
+function Market({ city, notify }: { city: City; notify: Notify }) {
+  const [give, setGive] = useState<ResourceId>('timber');
+  const [get, setGet] = useState<ResourceId>('stone');
+  const [share, setShare] = useState(0.25);
+  if (city.levels.market <= 0) return null;
+  const rate = tradeRate(city.levels.market, city.traits.includes('crossroads'));
+  const room = Math.max(0, storageCap(city.levels.storehouse) - city.resources[get]);
+  // Never offer more than fits: a trade that would overflow is refused.
+  const amountToGive = Math.floor(Math.min(city.resources[give] * share, room / rate));
+  const received = tradeReturn(city, amountToGive);
+  const pick = (kind: 'give' | 'get', r: ResourceId) => {
+    if (kind === 'give') {
+      setGive(r);
+      if (r === get) setGet(give);
+    } else {
+      setGet(r);
+      if (r === give) setGive(get);
+    }
+  };
+  const choices = (kind: 'give' | 'get', current: ResourceId) => (
+    <div className="mt-1 grid grid-cols-3 gap-2">
+      {RESOURCES.map((r) => (
+        <button
+          key={r}
+          type="button"
+          aria-pressed={current === r}
+          onClick={() => pick(kind, r)}
+          className={`min-h-11 rounded-lg border px-1 py-2 text-[0.95rem] font-bold ${
+            current === r ? 'border-azure bg-azure text-night' : `border-line bg-raised ${RESOURCE_TEXT[r]}`
+          }`}
+        >
+          {RESOURCE_NAMES[r]}
+        </button>
+      ))}
+    </div>
+  );
+  return (
+    <Section title="Market" aside={`Returns ${Math.round(rate * 100)}%`}>
+      <p className="py-2 text-muted">
+        Swap what you have too much of for what you are short of. A bigger Market gives back more.
+      </p>
+      <div className="text-sm text-muted">Give</div>
+      {choices('give', give)}
+      <div className="mt-3 text-sm text-muted">Get</div>
+      {choices('get', get)}
+      <div className="mt-3 text-sm text-muted">How much of your {RESOURCE_NAMES[give].toLowerCase()}</div>
+      <div className="mt-1 grid grid-cols-4 gap-2">
+        {[0.1, 0.25, 0.5, 1].map((s) => (
+          <button
+            key={s}
+            type="button"
+            aria-pressed={share === s}
+            onClick={() => setShare(s)}
+            className={`num min-h-11 rounded-lg border py-2 text-[0.95rem] font-bold ${
+              share === s ? 'border-azure bg-azure text-night' : 'border-line bg-raised text-frost'
+            }`}
+          >
+            {s === 1 ? 'All' : `${s * 100}%`}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <span className="num">
+          {received > 0
+            ? `${amount(amountToGive)} ${RESOURCE_NAMES[give].toLowerCase()} for ${amount(received)} ${RESOURCE_NAMES[get].toLowerCase()}`
+            : city.resources[give] * rate < 1
+              ? `No ${RESOURCE_NAMES[give].toLowerCase()} to trade`
+              : `No room for more ${RESOURCE_NAMES[get].toLowerCase()}`}
+        </span>
+        <Button
+          disabled={amountToGive <= 0 || received <= 0}
+          onClick={() => {
+            const result = controller.act((s) => trade(s, city.id, give, get, amountToGive));
+            if (result.ok) notify(`Traded for ${amount(received)} ${RESOURCE_NAMES[get].toLowerCase()}`);
+            else notify('That trade could not be made', 'bad');
+          }}
+        >
+          Trade
+        </Button>
+      </div>
+    </Section>
+  );
+}
+
 /** How much of the Farm's room the city's buildings are using. */
 function Population({ city }: { city: City }) {
   const used = populationUsed(city);
-  const cap = populationCap(city.levels.farm);
+  const cap = cityPopulationCap(city);
   const tight = cap - used < cap * 0.1;
   return (
     <div className="mt-3">
@@ -711,6 +798,9 @@ export function App() {
                 ))}
                 <span className="num text-sm text-muted">{worldAge(state.clock.gameTime)}</span>
               </div>
+              <p className="mt-2 text-sm text-muted">
+                {city.traits.map((t) => `${TRAIT_NAMES[t]}: ${TRAIT_SUMMARY[t].toLowerCase()}.`).join(' ')}
+              </p>
               <Population city={city} />
               {frozenHours > 0 && (
                 <p className="mt-2 text-sm text-muted">The valley has stood still for {frozenHours} hours in all.</p>
@@ -719,6 +809,7 @@ export function App() {
             <InstallHint />
             <Queue state={state} city={city} notify={notify} />
             <Plan city={city} notify={notify} />
+            <Market city={city} notify={notify} />
             <Buildings state={state} city={city} notify={notify} />
           </>
         )}

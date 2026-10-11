@@ -29,7 +29,7 @@ const CITY_NAMES = [
   'Wolfden',
 ];
 
-const ECONOMY_TRAITS: TraitId[] = ['fertile', 'forested', 'oreRich', 'crossroads'];
+const ECONOMY_TRAITS: TraitId[] = ['fertile', 'forested', 'rocky', 'oreRich', 'crossroads'];
 
 /** Each site has one economic trait, and some are also a hilltop. */
 export function rollSiteTraits(seed: string, siteKey: string | number): TraitId[] {

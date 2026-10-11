@@ -14,6 +14,7 @@ import {
   advance,
   buildDurationMs,
   cancelBuild,
+  cityPopulationCap,
   cityRates,
   createWorld,
   empireIncome,
@@ -31,6 +32,9 @@ import {
   runUntil,
   setPlan,
   storageCap,
+  trade,
+  tradeRate,
+  tradeReturn,
   upgradeCost,
   wallTimeOf,
 } from './index';
@@ -43,7 +47,7 @@ const capital = (state: GameState) => state.cities[0]!;
 /** A modest stockpile, for tests about orders rather than about gathering. */
 function stock(state: GameState, amount = 400) {
   const city = capital(state);
-  city.resources = { food: amount, timber: amount, metal: amount, wealth: 0 };
+  city.resources = { timber: amount, stone: amount, metal: amount };
 }
 
 /** Give the city plenty of everything, for tests that are not about affording things. */
@@ -312,13 +316,32 @@ describe('the economy', () => {
     const state = newWorld('plain');
     const city = capital(state);
     city.traits = [];
-    city.resources = { food: 0, timber: 0, metal: 0, wealth: 0 };
+    city.resources = { timber: 0, stone: 0, metal: 0 };
     city.levels.lumberCamp = 3;
     advance(state, T0 + HOUR);
-    expect(city.resources.food).toBeCloseTo(productionPerHour('food', 1), 6);
     expect(city.resources.timber).toBeCloseTo(productionPerHour('timber', 3), 6);
-    // No Market, no Wealth.
-    expect(city.resources.wealth).toBe(0);
+    expect(city.resources.stone).toBeCloseTo(productionPerHour('stone', 1), 6);
+    expect(city.resources.metal).toBeCloseTo(productionPerHour('metal', 1), 6);
+  });
+
+  it('has exactly three resources, and every building costs all of them', () => {
+    expect([...RESOURCES]).toEqual(['timber', 'stone', 'metal']);
+    for (const b of BUILDINGS) {
+      for (const r of RESOURCES) expect(upgradeCost(b, 1)[r], `${b} ${r}`).toBeGreaterThan(0);
+    }
+  });
+
+  it('gives each resource one building that produces it, and the Farm produces none', () => {
+    const state = newWorld('plain');
+    const city = capital(state);
+    city.traits = [];
+    const before = rawRates(city);
+    city.levels.farm = 10;
+    city.levels.market = 10;
+    expect(rawRates(city)).toEqual(before);
+    city.levels.quarry = 5;
+    expect(rawRates(city).stone).toBeGreaterThan(before.stone);
+    expect(rawRates(city).timber).toBe(before.timber);
   });
 
   it('produces more with every level', () => {
@@ -353,10 +376,19 @@ describe('the economy', () => {
   it('applies site traits to production', () => {
     const state = newWorld('plain');
     const city = capital(state);
-    city.traits = ['fertile'];
+    city.traits = ['rocky'];
     const rates = cityRates(state, city);
-    expect(rates.food).toBeCloseTo(productionPerHour('food', 1) * 1.25, 6);
+    expect(rates.stone).toBeCloseTo(productionPerHour('stone', 1) * 1.25, 6);
     expect(rates.timber).toBeCloseTo(productionPerHour('timber', 1), 6);
+  });
+
+  it('lets a fertile site house more people', () => {
+    const city = capital(newWorld('plain'));
+    city.traits = [];
+    const plain = cityPopulationCap(city);
+    city.traits = ['fertile'];
+    expect(cityPopulationCap(city)).toBe(Math.round(plain * 1.2));
+    expect(plain).toBe(populationCap(city.levels.farm));
   });
 
   it('holds the whole empire to the income cap', () => {
@@ -377,7 +409,7 @@ describe('the economy', () => {
   it('founds a city with a small stockpile and room to grow', () => {
     const city = capital(newWorld('start'));
     // Enough for its first orders straight away.
-    for (const b of ['farm', 'lumberCamp', 'storehouse'] as const) {
+    for (const b of ['farm', 'lumberCamp', 'quarry', 'storehouse'] as const) {
       const cost = upgradeCost(b, 2);
       for (const r of RESOURCES) expect(city.resources[r]).toBeGreaterThanOrEqual(cost[r]);
     }
@@ -392,7 +424,12 @@ describe('population', () => {
     const state = newWorld('people');
     const city = capital(state);
     const before = populationUsed(city);
-    expect(before).toBe(populationForLevel('keep', 1) + populationForLevel('lumberCamp', 1) + populationForLevel('mine', 1));
+    expect(before).toBe(
+      populationForLevel('keep', 1) +
+        populationForLevel('lumberCamp', 1) +
+        populationForLevel('quarry', 1) +
+        populationForLevel('mine', 1),
+    );
     stock(state);
     queueBuild(state, city.id, 'mine');
     expect(populationUsed(city)).toBe(before + populationForLevel('mine', 2));
@@ -429,11 +466,77 @@ describe('population', () => {
   });
 });
 
+describe('the Market', () => {
+  function withMarket(level: number) {
+    const state = newWorld('trade');
+    const city = capital(state);
+    city.traits = [];
+    city.levels.market = level;
+    city.levels.storehouse = 10;
+    city.resources = { timber: 2000, stone: 100, metal: 500 };
+    return { state, city };
+  }
+
+  it('swaps one resource for another, keeping a cut', () => {
+    const { state, city } = withMarket(5);
+    const rate = tradeRate(5, false);
+    expect(trade(state, city.id, 'timber', 'stone', 1000)).toEqual({ ok: true });
+    expect(city.resources.timber).toBe(1000);
+    expect(city.resources.stone).toBe(100 + Math.floor(1000 * rate));
+    expect(city.resources.metal).toBe(500);
+    expect(tradeReturn(city, 1000)).toBe(Math.floor(1000 * rate));
+  });
+
+  it('never gives back as much as was given', () => {
+    for (let level = 1; level <= MAX_LEVEL; level++) {
+      for (const crossroads of [false, true]) {
+        expect(tradeRate(level, crossroads)).toBeGreaterThan(0);
+        expect(tradeRate(level, crossroads)).toBeLessThan(1);
+      }
+    }
+  });
+
+  it('trades on better terms at a bigger Market and at a crossroads', () => {
+    expect(tradeRate(10, false)).toBeGreaterThan(tradeRate(1, false));
+    expect(tradeRate(5, true)).toBeGreaterThan(tradeRate(5, false));
+    expect(tradeRate(0, true)).toBe(0);
+  });
+
+  it('refuses trades that make no sense', () => {
+    const { state, city } = withMarket(5);
+    expect(trade(state, city.id, 'timber', 'timber', 100).ok).toBe(false);
+    expect(trade(state, city.id, 'timber', 'stone', 0).ok).toBe(false);
+    expect(trade(state, city.id, 'timber', 'stone', 1.5).ok).toBe(false);
+    expect(trade(state, city.id, 'timber', 'stone', -50).ok).toBe(false);
+    expect(trade(state, city.id, 'stone', 'metal', 101)).toEqual({ ok: false, reason: 'cannot-afford' });
+    expect(city.resources).toEqual({ timber: 2000, stone: 100, metal: 500 });
+    city.levels.market = 0;
+    expect(trade(state, city.id, 'timber', 'stone', 100)).toEqual({ ok: false, reason: 'no-market' });
+  });
+
+  it('refuses a trade the Storehouse has no room for, instead of wasting it', () => {
+    const { state, city } = withMarket(5);
+    city.resources.stone = storageCap(city.levels.storehouse) - 10;
+    expect(trade(state, city.id, 'timber', 'stone', 1000)).toEqual({ ok: false, reason: 'no-room' });
+    expect(city.resources.timber).toBe(2000);
+  });
+
+  it('lets a waiting plan carry on as soon as a trade covers its order', () => {
+    const { state, city } = withMarket(5);
+    for (const b of ['lumberCamp', 'quarry', 'mine', 'farm', 'keep'] as const) city.levels[b] = 6;
+    city.resources = { timber: 6000, stone: 0, metal: 6000 };
+    setPlan(state, city.id, 'economy');
+    expect(city.queue).toHaveLength(0);
+    expect(trade(state, city.id, 'timber', 'stone', 3000).ok).toBe(true);
+    expect(city.queue.length).toBeGreaterThan(0);
+  });
+});
+
 describe('city plans', () => {
   it('builds an economy from an empty Storehouse while you are away', () => {
     const state = newWorld('scratch');
     const city = capital(state);
-    city.resources = { food: 0, timber: 0, metal: 0, wealth: 0 };
+    city.resources = { timber: 0, stone: 0, metal: 0 };
     setPlan(state, city.id, 'economy');
     expect(city.queue).toHaveLength(0);
     const report = advance(state, T0 + 12 * HOUR);

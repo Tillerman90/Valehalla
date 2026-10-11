@@ -6,6 +6,7 @@ import {
   HOUR,
   SAVE_VERSION,
   advance,
+  cancelBuild,
   checksumOf,
   createWorld,
   parseSave,
@@ -101,8 +102,9 @@ describe('saves from older versions', () => {
     expect(result.save.revision).toBe(v1.revision);
     expect(result.save.state.worldId).toBe(v1.state.worldId);
     expect(after.name).toBe(before.name);
-    expect(after.levels).toEqual(before.levels);
-    expect(after.resources).toEqual(before.resources);
+    expect(after.levels).toMatchObject(before.levels);
+    const total = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
+    expect(total(after.resources)).toBeCloseTo(total(before.resources), 6);
     expect(after.plan).toBe(before.plan);
     expect(after.traits).toEqual(before.traits);
     expect(result.save.state.clock).toEqual(v1.state.clock);
@@ -135,6 +137,60 @@ describe('saves from older versions', () => {
     if (!result.ok) return;
     expect(result.save.state.events.some((e) => (e.type as string) === 'villagerGrowth')).toBe(false);
     advance(result.save.state, old.savedAtWall + HOUR);
+  });
+
+  // A real save written by the version 2 rules: four resources, no Quarry, orders in the queue.
+  const v2Text = readFileSync(new URL('../engine/fixtures/save-v2.json', import.meta.url), 'utf8');
+  const v2 = JSON.parse(v2Text);
+
+  it('loads a version 2 save into three resources without throwing anything away', () => {
+    expect(v2.version).toBe(2);
+    const result = parseSave(v2Text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const before = v2.state.cities[0];
+    const after = result.save.state.cities[0]!;
+    expect(result.save.state.worldId).toBe(v2.state.worldId);
+    expect(after.name).toBe(before.name);
+    expect(Object.keys(after.resources).sort()).toEqual(['metal', 'stone', 'timber']);
+    // Everything the city owned is still there, just counted in three resources.
+    const total = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
+    expect(total(after.resources)).toBeCloseTo(total(before.resources), 6);
+    expect(after.resources.timber).toBeGreaterThanOrEqual(before.resources.timber);
+    expect(after.resources.metal).toBeGreaterThanOrEqual(before.resources.metal);
+    // Every old building keeps its level, and the new Quarry matches the others.
+    for (const [building, level] of Object.entries(before.levels)) {
+      expect(after.levels[building as keyof typeof after.levels], building).toBe(level);
+    }
+    expect(after.levels.quarry).toBe(Math.min(before.levels.lumberCamp, before.levels.mine));
+  });
+
+  it('keeps queued orders and refunds them at full value', () => {
+    const result = parseSave(v2Text);
+    if (!result.ok) throw new Error('version 2 save did not load');
+    const state = result.save.state;
+    const city = state.cities[0]!;
+    const before = v2.state.cities[0];
+    expect(city.queue.map((q) => q.building)).toEqual(before.queue.map((q: { building: string }) => q.building));
+    const total = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0);
+    const paid = total(before.queue[1].cost);
+    const stock = total(city.resources);
+    advance(state, state.clock.lastWall);
+    expect(cancelBuild(state, city.id, city.queue[1]!.id).ok).toBe(true);
+    expect(total(city.resources)).toBeCloseTo(stock + paid, 6);
+  });
+
+  it('plays on after loading a version 2 save', () => {
+    const result = parseSave(v2Text);
+    if (!result.ok) throw new Error('version 2 save did not load');
+    const state = result.save.state;
+    const city = state.cities[0]!;
+    setPlan(state, city.id, 'economy');
+    const levelsBefore = Object.values(city.levels).reduce((a, b) => a + b, 0);
+    advance(state, v2.savedAtWall + 12 * HOUR);
+    expect(Object.values(city.levels).reduce((a, b) => a + b, 0)).toBeGreaterThan(levelsBefore);
+    for (const r of Object.values(city.resources)) expect(Number.isFinite(r)).toBe(true);
+    expect(parseSave(serializeSave(state, result.save.revision + 1, 0)).ok).toBe(true);
   });
 
   it('still catches a damaged version 1 save', () => {

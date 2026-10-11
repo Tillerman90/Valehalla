@@ -19,7 +19,7 @@ export interface BuildingDef {
   id: BuildingId;
   name: string;
   /** Cost of level 1. Each later level costs costGrowth times the one before. */
-  baseCost: Partial<Resources>;
+  baseCost: Resources;
   costGrowth: number;
   /** Seconds to build level 1, before the Keep's speed bonus. */
   baseBuildSec: number;
@@ -39,7 +39,7 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
   keep: {
     id: 'keep',
     name: 'Keep',
-    baseCost: { food: 40, timber: 90, metal: 70 },
+    baseCost: { timber: 90, stone: 80, metal: 90 },
     costGrowth: COST_GROWTH,
     baseBuildSec: 60,
     timeGrowth: TIME_GROWTH,
@@ -50,19 +50,18 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
   farm: {
     id: 'farm',
     name: 'Farm',
-    baseCost: { timber: 60, metal: 40 },
+    baseCost: { timber: 45, stone: 40, metal: 40 },
     costGrowth: COST_GROWTH,
     baseBuildSec: 45,
     timeGrowth: TIME_GROWTH,
     requires: {},
     startLevel: 1,
     population: 0,
-    produces: 'food',
   },
   lumberCamp: {
     id: 'lumberCamp',
     name: 'Lumber Camp',
-    baseCost: { food: 20, timber: 50, metal: 50 },
+    baseCost: { timber: 50, stone: 60, metal: 55 },
     costGrowth: COST_GROWTH,
     baseBuildSec: 45,
     timeGrowth: TIME_GROWTH,
@@ -71,10 +70,22 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
     population: 5,
     produces: 'timber',
   },
+  quarry: {
+    id: 'quarry',
+    name: 'Quarry',
+    baseCost: { timber: 65, stone: 50, metal: 55 },
+    costGrowth: COST_GROWTH,
+    baseBuildSec: 45,
+    timeGrowth: TIME_GROWTH,
+    requires: {},
+    startLevel: 1,
+    population: 5,
+    produces: 'stone',
+  },
   mine: {
     id: 'mine',
     name: 'Mine',
-    baseCost: { food: 20, timber: 70, metal: 30 },
+    baseCost: { timber: 75, stone: 65, metal: 70 },
     costGrowth: COST_GROWTH,
     baseBuildSec: 45,
     timeGrowth: TIME_GROWTH,
@@ -86,19 +97,18 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
   market: {
     id: 'market',
     name: 'Market',
-    baseCost: { food: 60, timber: 100, metal: 80 },
+    baseCost: { timber: 100, stone: 100, metal: 110 },
     costGrowth: COST_GROWTH,
     baseBuildSec: 60,
     timeGrowth: TIME_GROWTH,
     requires: { keep: 3 },
     startLevel: 0,
     population: 10,
-    produces: 'wealth',
   },
   storehouse: {
     id: 'storehouse',
     name: 'Storehouse',
-    baseCost: { timber: 70, metal: 50 },
+    baseCost: { timber: 60, stone: 50, metal: 60 },
     costGrowth: COST_GROWTH,
     baseBuildSec: 40,
     timeGrowth: TIME_GROWTH,
@@ -109,7 +119,7 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
   barracks: {
     id: 'barracks',
     name: 'Barracks',
-    baseCost: { food: 70, timber: 110, metal: 90 },
+    baseCost: { timber: 110, stone: 90, metal: 90 },
     costGrowth: COST_GROWTH,
     baseBuildSec: 60,
     timeGrowth: TIME_GROWTH,
@@ -120,7 +130,7 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
   stable: {
     id: 'stable',
     name: 'Stable',
-    baseCost: { food: 110, timber: 140, metal: 120, wealth: 40 },
+    baseCost: { timber: 140, stone: 110, metal: 130 },
     costGrowth: COST_GROWTH,
     baseBuildSec: 75,
     timeGrowth: TIME_GROWTH,
@@ -131,7 +141,7 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
   workshop: {
     id: 'workshop',
     name: 'Workshop',
-    baseCost: { food: 60, timber: 170, metal: 150, wealth: 60 },
+    baseCost: { timber: 170, stone: 150, metal: 110 },
     costGrowth: COST_GROWTH,
     baseBuildSec: 90,
     timeGrowth: TIME_GROWTH,
@@ -142,7 +152,7 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
   wall: {
     id: 'wall',
     name: 'Wall',
-    baseCost: { timber: 60, metal: 100 },
+    baseCost: { timber: 50, stone: 100, metal: 50 },
     costGrowth: COST_GROWTH,
     baseBuildSec: 50,
     timeGrowth: TIME_GROWTH,
@@ -153,7 +163,7 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
   watchtower: {
     id: 'watchtower',
     name: 'Watchtower',
-    baseCost: { timber: 90, metal: 60, wealth: 20 },
+    baseCost: { timber: 80, stone: 70, metal: 70 },
     costGrowth: COST_GROWTH,
     baseBuildSec: 50,
     timeGrowth: TIME_GROWTH,
@@ -164,7 +174,7 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
   court: {
     id: 'court',
     name: 'Court',
-    baseCost: { food: 600, timber: 800, metal: 800, wealth: 500 },
+    baseCost: { timber: 750, stone: 800, metal: 650 },
     costGrowth: 1.3,
     baseBuildSec: 900,
     timeGrowth: 1.35,
@@ -176,44 +186,56 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
 
 /** The building that produces each resource. */
 export const JOB_BUILDING: Record<ResourceId, BuildingId> = {
-  food: 'farm',
   timber: 'lumberCamp',
+  stone: 'quarry',
   metal: 'mine',
-  wealth: 'market',
 };
 
 /** Hourly output of a level 1 production building. Each level multiplies it by PRODUCTION_GROWTH. */
-export const BASE_PRODUCTION: Resources = { food: 180, timber: 180, metal: 180, wealth: 120 };
+export const BASE_PRODUCTION: Resources = { timber: 180, stone: 180, metal: 180 };
 export const PRODUCTION_GROWTH = 1.25;
 
 export const TRAIT_NAMES: Record<TraitId, string> = {
   fertile: 'Fertile',
   forested: 'Forested',
+  rocky: 'Rocky',
   oreRich: 'Ore-rich',
   crossroads: 'Crossroads',
   hilltop: 'Hilltop',
 };
 
-/** Production bonus a site trait gives. Hilltop is defensive and arrives with combat. */
+export const TRAIT_SUMMARY: Record<TraitId, string> = {
+  fertile: 'The Farm houses a fifth more people',
+  forested: 'A quarter more timber',
+  rocky: 'A quarter more stone',
+  oreRich: 'A quarter more metal',
+  crossroads: 'Better rates at the Market',
+  hilltop: 'Easier to defend, once there is something to defend against',
+};
+
+/** Production bonus a site trait gives. */
 export const TRAIT_YIELD: Record<TraitId, Partial<Resources>> = {
-  fertile: { food: 1.25 },
+  fertile: {},
   forested: { timber: 1.25 },
+  rocky: { stone: 1.25 },
   oreRich: { metal: 1.25 },
-  crossroads: { wealth: 1.25 },
+  crossroads: {},
   hilltop: {},
 };
 
+/** A fertile site's Farm houses this many times more people. */
+export const FERTILE_POPULATION = 1.2;
+
 /** A founding city's stockpile: enough for its first three or four orders, and no more. */
-export const STARTING_RESOURCES: Resources = { food: 150, timber: 400, metal: 300, wealth: 0 };
+export const STARTING_RESOURCES: Resources = { timber: 400, stone: 350, metal: 300 };
 
 export function upgradeCost(building: BuildingId, targetLevel: number): Resources {
   const def = BUILDING_DEFS[building];
   const scale = Math.pow(def.costGrowth, targetLevel - 1);
   return {
-    food: Math.round((def.baseCost.food ?? 0) * scale),
-    timber: Math.round((def.baseCost.timber ?? 0) * scale),
-    metal: Math.round((def.baseCost.metal ?? 0) * scale),
-    wealth: Math.round((def.baseCost.wealth ?? 0) * scale),
+    timber: Math.round(def.baseCost.timber * scale),
+    stone: Math.round(def.baseCost.stone * scale),
+    metal: Math.round(def.baseCost.metal * scale),
   };
 }
 
@@ -240,7 +262,7 @@ export function productionPerHour(resource: ResourceId, level: number): number {
 
 export const POPULATION_GROWTH = 1.17;
 
-/** People a city can house. Buildings use some; troops will use the rest. */
+/** People a Farm of this level can house, before site traits. Buildings use some; troops will use the rest. */
 export function populationCap(farmLevel: number): number {
   return Math.round(240 * Math.pow(1.33, Math.max(0, farmLevel - 1)));
 }
@@ -252,6 +274,15 @@ export function populationForLevel(building: BuildingId, level: number): number 
 
 export function storageCap(storehouseLevel: number): number {
   return storehouseLevel <= 0 ? 400 : Math.round(800 * Math.pow(1.3, storehouseLevel - 1));
+}
+
+/**
+ * The share of what you give that comes back in a Market trade. A bigger
+ * Market trades on better terms, and a crossroads site better still.
+ */
+export function tradeRate(marketLevel: number, atCrossroads: boolean): number {
+  if (marketLevel <= 0) return 0;
+  return Math.min(0.95, 0.5 + 0.03 * marketLevel + (atCrossroads ? 0.1 : 0));
 }
 
 /** Empire-wide ceiling on hourly income of each resource. */
@@ -279,6 +310,7 @@ export const PLAN_DEFS: Record<PlanId, PlanDef> = {
       keep: 1.5,
       farm: 1,
       lumberCamp: 1,
+      quarry: 1,
       mine: 1,
       storehouse: 1,
       market: 0.5,
@@ -301,6 +333,7 @@ export const PLAN_DEFS: Record<PlanId, PlanDef> = {
       storehouse: 1,
       farm: 0.5,
       lumberCamp: 0.5,
+      quarry: 0.5,
       mine: 0.5,
       barracks: 0,
       market: 0,
@@ -320,6 +353,7 @@ export const PLAN_DEFS: Record<PlanId, PlanDef> = {
       keep: 1,
       workshop: 0.5,
       lumberCamp: 0.5,
+      quarry: 0.5,
       mine: 0.5,
       storehouse: 0.5,
       market: 0,

@@ -8,7 +8,7 @@ import { BUILDINGS, PLANS, RESOURCES } from './types';
 import type { GameState } from './types';
 
 export const SAVE_FORMAT = 'valehalla-save';
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export interface SaveFile {
   format: typeof SAVE_FORMAT;
@@ -41,6 +41,33 @@ const MIGRATIONS: Record<number, (state: unknown) => unknown> = {
     }
     if (Array.isArray(state.events)) {
       state.events = state.events.filter((e) => !isObject(e) || e.type !== 'villagerGrowth');
+    }
+    return state;
+  },
+  // Version 3 went from four resources to three (Timber, Stone, Metal) and
+  // added the Quarry. Nothing a city had is thrown away: Food becomes Stone,
+  // Wealth is shared out across all three, and the Quarry starts level with
+  // the city's other production buildings.
+  2: (state) => {
+    if (!isObject(state) || !Array.isArray(state.cities)) return state;
+    const convert = (old: unknown): Record<string, number> => {
+      const o = isObject(old) ? old : {};
+      const n = (key: string) => (isFiniteNumber(o[key]) ? (o[key] as number) : 0);
+      const share = n('wealth') / 3;
+      return { timber: n('timber') + share, stone: n('food') + share, metal: n('metal') + share };
+    };
+    for (const city of state.cities) {
+      if (!isObject(city)) continue;
+      city.resources = convert(city.resources);
+      if (Array.isArray(city.queue)) {
+        for (const item of city.queue) if (isObject(item)) item.cost = convert(item.cost);
+      }
+      const levels = city.levels;
+      if (isObject(levels) && !isFiniteNumber(levels.quarry)) {
+        const camp = isFiniteNumber(levels.lumberCamp) ? levels.lumberCamp : 1;
+        const mine = isFiniteNumber(levels.mine) ? levels.mine : 1;
+        levels.quarry = Math.max(1, Math.min(camp, mine));
+      }
     }
     return state;
   },

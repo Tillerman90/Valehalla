@@ -3,6 +3,7 @@
 // long the gap is. That is what makes catching up after 12 hours instant.
 
 import {
+  FERTILE_POPULATION,
   HOUR,
   JOB_BUILDING,
   TRAIT_YIELD,
@@ -40,8 +41,14 @@ export function populationUsed(city: City): number {
   return used;
 }
 
+/** People this city can house: the Farm's level, and more on a fertile site. */
+export function cityPopulationCap(city: City): number {
+  const bonus = city.traits.includes('fertile') ? FERTILE_POPULATION : 1;
+  return Math.round(populationCap(city.levels.farm) * bonus);
+}
+
 export function populationFree(city: City): number {
-  return populationCap(city.levels.farm) - populationUsed(city);
+  return cityPopulationCap(city) - populationUsed(city);
 }
 
 /** Whether the Farm can house the people one more level of this building needs. */

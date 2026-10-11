@@ -12,7 +12,7 @@ game screens start in phase 1.
 
 | Folder | What it holds |
 | --- | --- |
-| `src/engine` | The rules. Pure TypeScript, no browser code. Game clock, event queue, catch-up, economy (production from building levels, Farm population), build queue, city plans, seeded rolls, save format with migrations |
+| `src/engine` | The rules. Pure TypeScript, no browser code. Game clock, event queue, catch-up, economy (three resources, production from building levels, Farm population, Market trading), build queue, city plans, seeded rolls, save format with migrations |
 | `src/engine/content.ts` | Every balance number. Tuning the game means editing this file |
 | `src/storage` | Autosave to the phone (rotating slots in two storage systems) and backup to a private GitHub Gist |
 | `src/sim` | Bot players and the balance simulator |

@@ -17,9 +17,13 @@ https://claude.ai/code/artifact/c9d3c711-4d49-4d71-9275-cc416e067b84
 - New rules get tests in the same change. `npm test` and `npm run sim` must
   both pass before a push; pushes to `main` deploy to GitHub Pages.
 - No AI or API calls at runtime. No diplomacy, no random events, no Ages, no
-  research tracks, no villagers or job assignment: these were considered and
-  cut. Production follows building levels, as in Tribal Wars, and the Farm's
-  population cap is shared by buildings and (later) troops.
+  research tracks, no villagers or job assignment, no Food or Wealth: these
+  were considered and cut. The economy is Tribal Wars': three resources
+  (Timber, Stone, Metal) that every building and unit costs a mix of,
+  production from building levels, a Farm that only sets the population cap
+  (shared by buildings and, later, troops), and a Market that swaps surplus.
+- The simulator checks that no resource loses more than 20% to a full
+  Storehouse. Keep that passing when adding costs or units.
 - Rival faction names, personalities and capital powers belong in a content
   file the owner does not read. Never describe them in the doc, README, commit
   messages or chat.

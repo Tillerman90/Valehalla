@@ -1,7 +1,7 @@
 // Core data shapes. Everything in GameState must be plain JSON so it can be
 // saved, restored and replayed by the simulator.
 
-export const RESOURCES = ['food', 'timber', 'metal', 'wealth'] as const;
+export const RESOURCES = ['timber', 'stone', 'metal'] as const;
 export type ResourceId = (typeof RESOURCES)[number];
 export type Resources = Record<ResourceId, number>;
 
@@ -9,6 +9,7 @@ export const BUILDINGS = [
   'keep',
   'farm',
   'lumberCamp',
+  'quarry',
   'mine',
   'market',
   'storehouse',
@@ -21,7 +22,7 @@ export const BUILDINGS = [
 ] as const;
 export type BuildingId = (typeof BUILDINGS)[number];
 
-export const TRAITS = ['fertile', 'forested', 'oreRich', 'crossroads', 'hilltop'] as const;
+export const TRAITS = ['fertile', 'forested', 'rocky', 'oreRich', 'crossroads', 'hilltop'] as const;
 export type TraitId = (typeof TRAITS)[number];
 
 export const PLANS = ['economy', 'fortress', 'barracks'] as const;
@@ -96,7 +97,10 @@ export type ActionFailure =
   | 'requirements'
   | 'cannot-afford'
   | 'no-such-order'
-  | 'farm-too-small';
+  | 'farm-too-small'
+  | 'no-market'
+  | 'invalid-trade'
+  | 'no-room';
 
 export interface CompletedBuild {
   cityId: number;
@@ -120,5 +124,5 @@ export interface AdvanceReport {
 }
 
 export function zeroResources(): Resources {
-  return { food: 0, timber: 0, metal: 0, wealth: 0 };
+  return { timber: 0, stone: 0, metal: 0 };
 }

@@ -5,6 +5,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { HOUR, MAX_BUILD_MS } from '../engine/content';
+import { RESOURCES } from '../engine/types';
 import { BOTS } from './bots';
 import { simulateWorld } from './simulate';
 import type { WorldResult } from './simulate';
@@ -70,6 +71,7 @@ const levels7 = (results: WorldResult[]) => mean(results.map((r) => r.levelsAtDa
 const twiceVsBalanced = levels7(twice) / levels7(balanced);
 const handVsBalanced = levels7(byHand) / levels7(balanced);
 const wastedBalanced = mean(balanced.map((r) => r.wastedShare));
+const worstOverflow = Math.max(...RESOURCES.map((res) => mean(balanced.map((r) => r.wastedByResource[res]))));
 const builtMedian = median(balanced.map((r) => r.fullyBuiltDay));
 const frozen = mean(once.map((r) => r.frozenShare));
 const expectedFrozen = (8 + (DAYS - 1) * 12) / (20 + (DAYS - 1) * 24);
@@ -95,6 +97,12 @@ const checks: Check[] = [
     target: 'At least 70% of the balanced bot\'s building levels at day 7',
     result: pct(twiceVsBalanced),
     pass: twiceVsBalanced >= 0.7,
+  },
+  {
+    name: 'Most overflowing resource, balanced bot',
+    target: 'No resource loses more than 20% to a full Storehouse',
+    result: pct(worstOverflow),
+    pass: worstOverflow <= 0.2,
   },
   {
     name: '12-hour freeze, once-a-day bot',
@@ -128,7 +136,7 @@ const observations: [string, string, string][] = [
   [
     'Production lost to a full Storehouse, balanced bot',
     pct(wastedBalanced),
-    'Food and Wealth overflow because nothing spends them until armies and Claimants arrive.',
+    'The bots never trade at the Market, so a player who does will lose less.',
   ],
 ];
 
@@ -168,10 +176,10 @@ row('Day Keep reaches 10', (r) => spread(r.map((x) => x.keep10Day)));
 row('Day Court is built', (r) => spread(r.map((x) => x.courtDay)));
 row('Day city is fully built', (r) => spread(r.map((x) => x.fullyBuiltDay)));
 for (const day of [1, 3, 7, 14, 21, 28].filter((d) => d <= DAYS)) {
-  row(`Building levels at day ${day} (of 180)`, (r) => mean(r.map((x) => x.levelsAtDay[day] ?? 0)).toFixed(0));
+  row(`Building levels at day ${day} (of 195)`, (r) => mean(r.map((x) => x.levelsAtDay[day] ?? 0)).toFixed(0));
 }
 row('Check-ins where a build had finished', (r) => pct(mean(r.map((x) => x.checkInsWithProgress / Math.max(1, x.checkIns)))));
-for (const res of ['timber', 'metal', 'food', 'wealth'] as const) {
+for (const res of RESOURCES) {
   row(`${res[0]!.toUpperCase()}${res.slice(1)} lost to a full Storehouse`, (r) => pct(mean(r.map((x) => x.wastedByResource[res]))));
 }
 row('Share of time the world was frozen', (r) => pct(mean(r.map((x) => x.frozenShare))));
