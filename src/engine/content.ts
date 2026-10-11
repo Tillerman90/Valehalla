@@ -14,8 +14,6 @@ export const AWAY_CAP_MS = 12 * HOUR;
 export const MAX_LEVEL = 15;
 /** No single build may take longer than this. */
 export const MAX_BUILD_MS = 8 * HOUR;
-/** Villagers arrive in small batches this often. */
-export const GROWTH_PULSE_MS = 10 * MINUTE;
 
 export interface BuildingDef {
   id: BuildingId;
@@ -28,8 +26,10 @@ export interface BuildingDef {
   timeGrowth: number;
   requires: Partial<Record<BuildingId, number>>;
   startLevel: number;
-  /** The resource villagers produce when they work here. */
-  job?: ResourceId;
+  /** The resource this building produces. */
+  produces?: ResourceId;
+  /** People the first level needs. Each later level needs POPULATION_GROWTH times more. */
+  population: number;
 }
 
 const COST_GROWTH = 1.42;
@@ -45,6 +45,7 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
     timeGrowth: TIME_GROWTH,
     requires: {},
     startLevel: 1,
+    population: 5,
   },
   farm: {
     id: 'farm',
@@ -55,7 +56,8 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
     timeGrowth: TIME_GROWTH,
     requires: {},
     startLevel: 1,
-    job: 'food',
+    population: 0,
+    produces: 'food',
   },
   lumberCamp: {
     id: 'lumberCamp',
@@ -66,7 +68,8 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
     timeGrowth: TIME_GROWTH,
     requires: {},
     startLevel: 1,
-    job: 'timber',
+    population: 5,
+    produces: 'timber',
   },
   mine: {
     id: 'mine',
@@ -77,7 +80,8 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
     timeGrowth: TIME_GROWTH,
     requires: {},
     startLevel: 1,
-    job: 'metal',
+    population: 5,
+    produces: 'metal',
   },
   market: {
     id: 'market',
@@ -88,7 +92,8 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
     timeGrowth: TIME_GROWTH,
     requires: { keep: 3 },
     startLevel: 0,
-    job: 'wealth',
+    population: 10,
+    produces: 'wealth',
   },
   storehouse: {
     id: 'storehouse',
@@ -99,6 +104,7 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
     timeGrowth: TIME_GROWTH,
     requires: {},
     startLevel: 1,
+    population: 0,
   },
   barracks: {
     id: 'barracks',
@@ -109,6 +115,7 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
     timeGrowth: TIME_GROWTH,
     requires: { keep: 2 },
     startLevel: 0,
+    population: 7,
   },
   stable: {
     id: 'stable',
@@ -119,6 +126,7 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
     timeGrowth: TIME_GROWTH,
     requires: { keep: 5, barracks: 3 },
     startLevel: 0,
+    population: 8,
   },
   workshop: {
     id: 'workshop',
@@ -129,6 +137,7 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
     timeGrowth: TIME_GROWTH,
     requires: { keep: 7, barracks: 5 },
     startLevel: 0,
+    population: 8,
   },
   wall: {
     id: 'wall',
@@ -139,6 +148,7 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
     timeGrowth: TIME_GROWTH,
     requires: { keep: 3 },
     startLevel: 0,
+    population: 5,
   },
   watchtower: {
     id: 'watchtower',
@@ -149,6 +159,7 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
     timeGrowth: TIME_GROWTH,
     requires: { keep: 4 },
     startLevel: 0,
+    population: 5,
   },
   court: {
     id: 'court',
@@ -159,10 +170,11 @@ export const BUILDING_DEFS: Record<BuildingId, BuildingDef> = {
     timeGrowth: 1.35,
     requires: { keep: 10 },
     startLevel: 0,
+    population: 40,
   },
 };
 
-/** Which building's level sets the worker slots for each resource. */
+/** The building that produces each resource. */
 export const JOB_BUILDING: Record<ResourceId, BuildingId> = {
   food: 'farm',
   timber: 'lumberCamp',
@@ -170,8 +182,9 @@ export const JOB_BUILDING: Record<ResourceId, BuildingId> = {
   wealth: 'market',
 };
 
-/** What one villager produces per hour in each job. */
-export const YIELD_PER_HOUR: Resources = { food: 30, timber: 30, metal: 30, wealth: 20 };
+/** Hourly output of a level 1 production building. Each level multiplies it by PRODUCTION_GROWTH. */
+export const BASE_PRODUCTION: Resources = { food: 180, timber: 180, metal: 180, wealth: 120 };
+export const PRODUCTION_GROWTH = 1.25;
 
 export const TRAIT_NAMES: Record<TraitId, string> = {
   fertile: 'Fertile',
@@ -190,9 +203,8 @@ export const TRAIT_YIELD: Record<TraitId, Partial<Resources>> = {
   hilltop: {},
 };
 
-/** A founding city starts with nothing in store. Its first villagers have to gather it. */
-export const STARTING_RESOURCES: Resources = { food: 0, timber: 0, metal: 0, wealth: 0 };
-export const STARTING_VILLAGERS = 12;
+/** A founding city's stockpile: enough for its first three or four orders, and no more. */
+export const STARTING_RESOURCES: Resources = { food: 150, timber: 400, metal: 300, wealth: 0 };
 
 export function upgradeCost(building: BuildingId, targetLevel: number): Resources {
   const def = BUILDING_DEFS[building];
@@ -221,18 +233,21 @@ export function queueSlots(keepLevel: number): number {
   return Math.min(5, 2 + Math.floor(keepLevel / 5));
 }
 
-/** Villagers who can work in a job building of this level. */
-export function workerSlots(level: number): number {
-  return level <= 0 ? 0 : Math.round(6 * Math.pow(1.25, level - 1));
+/** What a production building of this level makes per hour, before site traits. */
+export function productionPerHour(resource: ResourceId, level: number): number {
+  return level <= 0 ? 0 : Math.round(BASE_PRODUCTION[resource] * Math.pow(PRODUCTION_GROWTH, level - 1));
 }
 
-/** Most people a city can hold. Troops will share this cap when armies arrive. */
+export const POPULATION_GROWTH = 1.17;
+
+/** People a city can house. Buildings use some; troops will use the rest. */
 export function populationCap(farmLevel: number): number {
-  return Math.round(24 * Math.pow(1.28, Math.max(0, farmLevel - 1)));
+  return Math.round(240 * Math.pow(1.33, Math.max(0, farmLevel - 1)));
 }
 
-export function villagersPerHour(farmLevel: number): number {
-  return 20 * Math.pow(1.22, Math.max(0, farmLevel - 1));
+/** People one level of a building needs, on top of the levels below it. */
+export function populationForLevel(building: BuildingId, level: number): number {
+  return level <= 0 ? 0 : Math.round(BUILDING_DEFS[building].population * Math.pow(POPULATION_GROWTH, level - 1));
 }
 
 export function storageCap(storehouseLevel: number): number {
@@ -318,8 +333,3 @@ export const PLAN_DEFS: Record<PlanId, PlanDef> = {
 /** The plan looks again at least this often while it is saving up. */
 export const PLAN_RECHECK_MAX_MS = 30 * MINUTE;
 export const PLAN_RECHECK_MIN_MS = MINUTE;
-
-/** How many upcoming orders the villagers look ahead to when sharing themselves out. */
-export const JOBS_LOOK_AHEAD = 3;
-/** The part of the workforce always spread evenly, so no resource dries up completely. */
-export const JOBS_EVEN_SHARE = 0.15;

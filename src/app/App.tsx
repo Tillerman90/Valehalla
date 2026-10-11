@@ -8,24 +8,21 @@ import {
   BUILDINGS,
   BUILDING_DEFS,
   HOUR,
-  JOB_BUILDING,
   MAX_LEVEL,
   PLANS,
   PLAN_DEFS,
   RESOURCES,
   TRAIT_NAMES,
-  assignedVillagers,
   buildBlocker,
   buildDurationMs,
   cancelBuild,
   cityRates,
-  jobSlots,
   nextTargetLevel,
   populationCap,
+  populationForLevel,
+  populationUsed,
   queueBuild,
   queueSlots,
-  setAutoAssign,
-  setJobs,
   setPlan,
   storageCap,
   timeToAfford,
@@ -60,12 +57,6 @@ type Tone = 'good' | 'bad';
 type Notify = (text: string, tone?: Tone) => void;
 
 const RESOURCE_NAMES: Record<ResourceId, string> = { food: 'Food', timber: 'Timber', metal: 'Metal', wealth: 'Wealth' };
-const JOB_NAMES: Record<ResourceId, string> = {
-  food: 'Farmers',
-  timber: 'Woodcutters',
-  metal: 'Miners',
-  wealth: 'Merchants',
-};
 
 function Section({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
   return (
@@ -171,7 +162,6 @@ function ResourceStrip({ state, city }: { state: GameState; city: City }) {
 function AwayReport({ report, city, onDismiss }: { report: AdvanceReport; city: City; onDismiss: () => void }) {
   const gained = report.gained[city.id];
   const wasted = report.wasted[city.id];
-  const arrived = report.villagersArrived[city.id] ?? 0;
   const finished = new Map<BuildingId, number>();
   for (const build of report.builds) finished.set(build.building, build.level);
   const lost = wasted ? RESOURCES.filter((r) => wasted[r] >= 1) : [];
@@ -195,7 +185,7 @@ function AwayReport({ report, city, onDismiss }: { report: AdvanceReport; city: 
           {RESOURCES.filter((r) => gained[r] >= 1)
             .map((r) => `${amount(gained[r])} ${RESOURCE_NAMES[r].toLowerCase()}`)
             .join(', ') || 'nothing'}
-          .{arrived > 0 ? ` ${arrived} villagers arrived.` : ''}
+          .
         </p>
       )}
       {lost.length > 0 && wasted && (
@@ -307,6 +297,8 @@ function blockerText(city: City, building: BuildingId): string | null {
     }
     case 'queue-full':
       return 'No free order slot';
+    case 'farm-too-small':
+      return 'Farm too small to staff it';
     case 'cannot-afford':
       return 'Not enough resources';
     default:
@@ -348,9 +340,12 @@ function Buildings({ state, city, notify }: { state: GameState; city: City; noti
                   <div className="num mt-0.5 text-[0.92rem] leading-snug text-muted">{costText(cost, city)}</div>
                   <div className="num text-[0.92rem] leading-snug text-muted">
                     <span className="whitespace-nowrap">Takes {duration(buildDurationMs(b, target, city.levels.keep))}</span>
-                    {locked && <span className="text-gold"> · {blocker}</span>}
-                    {!locked && short && <span className="text-ember"> · {waitText(state, city, cost)}</span>}
-                    {!locked && !short && blocker && <span> · {blocker}</span>}
+                    {populationForLevel(b, target) > 0 && (
+                      <span className="whitespace-nowrap">, {populationForLevel(b, target)} people</span>
+                    )}
+                    {(locked || blocker === 'Farm too small to staff it') && <span className="text-gold"> · {blocker}</span>}
+                    {!locked && blocker !== 'Farm too small to staff it' && short && <span className="text-ember"> · {waitText(state, city, cost)}</span>}
+                    {!locked && !short && blocker && blocker !== 'Farm too small to staff it' && <span> · {blocker}</span>}
                   </div>
                 </>
               ) : (
@@ -369,62 +364,6 @@ function Buildings({ state, city, notify }: { state: GameState; city: City; noti
                 {city.levels[b] === 0 && target === 1 ? 'Build' : `Raise to ${Math.min(target, MAX_LEVEL)}`}
               </Button>
             </div>
-          </div>
-        );
-      })}
-    </Section>
-  );
-}
-
-function Villagers({ city }: { city: City }) {
-  const working = assignedVillagers(city);
-  const idle = city.villagers - working;
-  const setJob = (r: ResourceId, wanted: number) => {
-    // A job can take its own workers plus whoever is idle, up to its slots.
-    const value = Math.max(0, Math.min(wanted, jobSlots(city, r), city.jobs[r] + idle));
-    if (value !== city.jobs[r]) controller.act((s) => setJobs(s, city.id, { ...city.jobs, [r]: value }));
-  };
-  return (
-    <Section title="Villagers" aside={`${city.villagers} of ${populationCap(city.levels.farm)}`}>
-      <label className="flex min-h-12 items-center justify-between gap-3 border-b border-line py-2">
-        <span>
-          <span className="font-medium">Share them out for me</span>
-          <span className="block text-sm text-muted">They go where the next orders need them</span>
-        </span>
-        <input
-          type="checkbox"
-          role="switch"
-          className="switch"
-          checked={city.autoAssign}
-          onChange={(e) => controller.act((s) => setAutoAssign(s, city.id, e.target.checked))}
-        />
-      </label>
-      <p className="py-2.5 text-muted">
-        {idle > 0
-          ? `${idle} have no work. Raise a job building to make room, or move a slider.`
-          : 'Everyone has work. Drag a slider to move villagers between jobs.'}
-      </p>
-      {RESOURCES.map((r) => {
-        const slots = jobSlots(city, r);
-        return (
-          <div key={r} className="border-b border-line py-2.5 last:border-b-0 last:pb-0">
-            <div className="flex items-baseline justify-between">
-              <span className={`font-medium ${RESOURCE_TEXT[r]}`}>{JOB_NAMES[r]}</span>
-              <span className="num text-muted">
-                {slots === 0 ? `Build a ${BUILDING_DEFS[JOB_BUILDING[r]].name} first` : `${city.jobs[r]} of ${slots}`}
-              </span>
-            </div>
-            <input
-              type="range"
-              className={`slider ${RESOURCE_TEXT[r]}`}
-              aria-label={JOB_NAMES[r]}
-              min={0}
-              max={Math.max(1, slots)}
-              step={1}
-              disabled={slots === 0}
-              value={city.jobs[r]}
-              onChange={(e) => setJob(r, Number(e.target.value))}
-            />
           </div>
         );
       })}
@@ -650,28 +589,40 @@ function InstallHint() {
   );
 }
 
-type TabId = 'city' | 'people' | 'saves';
+/** How much of the Farm's room the city's buildings are using. */
+function Population({ city }: { city: City }) {
+  const used = populationUsed(city);
+  const cap = populationCap(city.levels.farm);
+  const tight = cap - used < cap * 0.1;
+  return (
+    <div className="mt-3">
+      <div className="flex items-baseline justify-between text-sm">
+        <span className="text-muted">People housed by the Farm</span>
+        <span className={`num ${tight ? 'text-gold' : 'text-frost'}`}>
+          {amount(used)} of {amount(cap)}
+        </span>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-line">
+        <div className={`h-full ${tight ? 'bg-gold' : 'bg-azure'}`} style={{ width: `${Math.min(100, (used / cap) * 100)}%` }} />
+      </div>
+    </div>
+  );
+}
+
+type TabId = 'city' | 'saves';
 
 const TAB_ICONS: Record<TabId, ReactNode> = {
   city: <path d="M4 21V9h3v3h3V5h4v7h3V9h3v12h-6v-5h-4v5z" />,
-  people: (
-    <>
-      <circle cx="9" cy="8" r="3.5" />
-      <path d="M2.500 20c0-3.600 2.900-6 6.500-6s6.500 2.400 6.500 6z" />
-      <circle cx="17.500" cy="9.500" r="2.500" />
-      <path d="M17 14.500c2.800 0 4.800 1.900 4.800 5.500h-4.300c0-2-.6-3.800-1.700-5.200.4-.2.800-.3 1.200-.3z" />
-    </>
-  ),
   saves: <path d="M5 3h11l3 3v15H5zM8 3v6h7V3zM8 21v-7h8v7z" fillRule="evenodd" />,
 };
-const TAB_NAMES: Record<TabId, string> = { city: 'City', people: 'Villagers', saves: 'Saves' };
-const TABS: TabId[] = ['city', 'people', 'saves'];
+const TAB_NAMES: Record<TabId, string> = { city: 'City', saves: 'Saves' };
+const TABS: TabId[] = ['city', 'saves'];
 
 function TabBar({ tab, onChange, alerts }: { tab: TabId; onChange: (tab: TabId) => void; alerts: Record<TabId, boolean> }) {
   return (
     <nav
       aria-label="Sections"
-      className="grid shrink-0 grid-cols-3 border-t border-line bg-deep pb-[env(safe-area-inset-bottom)]"
+      className="grid shrink-0 grid-cols-2 border-t border-line bg-deep pb-[env(safe-area-inset-bottom)]"
     >
       {TABS.map((id) => {
         const current = id === tab;
@@ -685,7 +636,7 @@ function TabBar({ tab, onChange, alerts }: { tab: TabId; onChange: (tab: TabId) 
               current ? 'text-ice' : 'text-muted'
             }`}
           >
-            {current && <span className="absolute inset-x-6 top-0 h-[3px] rounded-b bg-azure" />}
+            {current && <span className="absolute inset-x-12 top-0 h-[3px] rounded-b bg-azure" />}
             <span className="relative">
               <svg viewBox="0 0 24 24" className="size-6" fill="currentColor" aria-hidden="true">
                 {TAB_ICONS[id]}
@@ -733,7 +684,6 @@ export function App() {
   const frozenHours = Math.floor(state.clock.frozenMs / HOUR);
   const alerts: Record<TabId, boolean> = {
     city: false,
-    people: city.villagers - assignedVillagers(city) > 0 && !city.autoAssign,
     saves: snap.cloudConflict !== null || snap.notices.length > 0 || snap.save.localFailures.length > 0,
   };
 
@@ -761,6 +711,7 @@ export function App() {
                 ))}
                 <span className="num text-sm text-muted">{worldAge(state.clock.gameTime)}</span>
               </div>
+              <Population city={city} />
               {frozenHours > 0 && (
                 <p className="mt-2 text-sm text-muted">The valley has stood still for {frozenHours} hours in all.</p>
               )}
@@ -771,7 +722,6 @@ export function App() {
             <Buildings state={state} city={city} notify={notify} />
           </>
         )}
-        {tab === 'people' && <Villagers city={city} />}
         {tab === 'saves' && (
           <>
             <Saves snap={snap} />

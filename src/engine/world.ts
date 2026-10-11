@@ -1,10 +1,9 @@
 // World creation. Phase 0 makes a single founding city; the map, neutral
 // villages and rival factions join in later phases through the same seed.
 
-import { BUILDING_DEFS, STARTING_RESOURCES, STARTING_VILLAGERS } from './content';
-import { ensureGrowth, refreshJobs } from './economy';
+import { BUILDING_DEFS, STARTING_RESOURCES } from './content';
 import { rngFor } from './rng';
-import { BUILDINGS, zeroResources } from './types';
+import { BUILDINGS } from './types';
 import type { BuildingId, City, GameState, TraitId } from './types';
 
 export const PLAYER = 'player';
@@ -50,18 +49,11 @@ export function createCity(state: GameState, owner: string, name: string, traits
     traits,
     levels,
     resources: { ...STARTING_RESOURCES },
-    villagers: STARTING_VILLAGERS,
-    villagerCarry: 0,
-    jobs: zeroResources(),
-    autoAssign: true,
     queue: [],
-    growthAt: null,
     plan: null,
     planCheckAt: null,
   };
-  refreshJobs(city);
   state.cities.push(city);
-  ensureGrowth(state, city, state.clock.gameTime);
   return city;
 }
 

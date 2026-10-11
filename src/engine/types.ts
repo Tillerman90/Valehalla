@@ -47,18 +47,8 @@ export interface City {
   traits: TraitId[];
   levels: Record<BuildingId, number>;
   resources: Resources;
-  /** Whole villagers living in the city. */
-  villagers: number;
-  /** Fraction of the next villager, carried between growth pulses. */
-  villagerCarry: number;
-  /** Villagers working each job. Never more than the building's slots. */
-  jobs: Resources;
-  /** When true the city spreads villagers across jobs by itself. */
-  autoAssign: boolean;
   /** Sequential build queue. The first item is the one under construction. */
   queue: QueueItem[];
-  /** Game time of the pending growth pulse, or null when the city is full. */
-  growthAt: number | null;
   /** The city plan that refills the queue by itself, or null to build by hand. */
   plan: PlanId | null;
   /** Game time the plan will next look at whether it can afford its next order. */
@@ -67,7 +57,6 @@ export interface City {
 
 export type GameEvent =
   | { id: number; at: number; type: 'buildComplete'; cityId: number; queueItemId: number }
-  | { id: number; at: number; type: 'villagerGrowth'; cityId: number }
   | { id: number; at: number; type: 'planCheck'; cityId: number };
 
 export interface GameClock {
@@ -107,7 +96,7 @@ export type ActionFailure =
   | 'requirements'
   | 'cannot-afford'
   | 'no-such-order'
-  | 'invalid-jobs';
+  | 'farm-too-small';
 
 export interface CompletedBuild {
   cityId: number;
@@ -127,7 +116,6 @@ export interface AdvanceReport {
   gained: Record<number, Resources>;
   /** Production lost because the Storehouse was full. */
   wasted: Record<number, Resources>;
-  villagersArrived: Record<number, number>;
   builds: CompletedBuild[];
 }
 

@@ -13,21 +13,27 @@ import {
   upgradeCost,
 } from './content';
 import { canAfford, nextTargetLevel, placeOrder, queueHasRoom, rankWishes, upgradeable } from './build';
-import { cityRates, refreshJobs } from './economy';
+import { cityRates, hasPopulationFor } from './economy';
 import { removeEvents, scheduleEvent } from './events';
 import { RESOURCES } from './types';
 import type { BuildingId, City, GameState, Resources } from './types';
 
 /**
  * If waiting alone will never pay for this building, return the building
- * that has to come first: a bigger Storehouse when the price is more than the
- * city can hold, or the job building for a resource the city has no income of.
+ * that has to come first: a bigger Farm when there is nobody to staff it, a
+ * bigger Storehouse when the price is more than the city can hold, or the
+ * building that produces a resource the city has no income of.
  * Returns the building itself when nothing stands in its way, and null when
  * it is stuck for a reason building cannot fix.
  */
 export function clearTheWay(state: GameState, city: City, building: BuildingId, depth = 0): BuildingId | null {
-  const cost = upgradeCost(building, nextTargetLevel(city, building));
+  const target = nextTargetLevel(city, building);
+  const cost = upgradeCost(building, target);
   const available = upgradeable(city);
+  if (!hasPopulationFor(city, building, target)) {
+    if (building === 'farm' || depth >= 3 || !available.includes('farm')) return null;
+    return clearTheWay(state, city, 'farm', depth + 1);
+  }
   if (RESOURCES.some((r) => cost[r] > storageCap(city.levels.storehouse))) {
     if (building === 'storehouse' || depth >= 3 || !available.includes('storehouse')) return null;
     return clearTheWay(state, city, 'storehouse', depth + 1);
@@ -36,8 +42,7 @@ export function clearTheWay(state: GameState, city: City, building: BuildingId, 
   const starved = RESOURCES.find((r) => cost[r] > city.resources[r] && rates[r] <= 0);
   if (starved) {
     const source = JOB_BUILDING[starved];
-    // Only a missing building can be fixed here. An existing one with nobody
-    // working in it is the player's choice of jobs.
+    // Only a missing building can be fixed here.
     if (city.levels[source] > 0 || source === building || depth >= 3 || !available.includes(source)) return null;
     return clearTheWay(state, city, source, depth + 1);
   }
@@ -86,15 +91,12 @@ export function runPlan(state: GameState, city: City, now: number): void {
     const cost = upgradeCost(choice, nextTargetLevel(city, choice));
     if (canAfford(city, cost)) {
       placeOrder(state, city, choice, now, true);
-      refreshJobs(city);
       continue;
     }
-    // Point the villagers at whatever this order is short of before timing the wait.
-    refreshJobs(city);
     const wait = timeToAfford(state, city, cost);
     if (wait === null) return;
-    // Income can rise before then (new villagers), so never sleep too long,
-    // and never so briefly that rounding makes the plan spin.
+    // Income can change before then, so never sleep too long, and never so
+    // briefly that rounding makes the plan spin.
     const delay = Math.min(PLAN_RECHECK_MAX_MS, Math.max(PLAN_RECHECK_MIN_MS, Math.ceil(wait)));
     city.planCheckAt = now + delay;
     scheduleEvent(state, { at: city.planCheckAt, type: 'planCheck', cityId: city.id });

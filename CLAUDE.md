@@ -17,7 +17,9 @@ https://claude.ai/code/artifact/c9d3c711-4d49-4d71-9275-cc416e067b84
 - New rules get tests in the same change. `npm test` and `npm run sim` must
   both pass before a push; pushes to `main` deploy to GitHub Pages.
 - No AI or API calls at runtime. No diplomacy, no random events, no Ages, no
-  research tracks: these were considered and cut.
+  research tracks, no villagers or job assignment: these were considered and
+  cut. Production follows building levels, as in Tribal Wars, and the Farm's
+  population cap is shared by buildings and (later) troops.
 - Rival faction names, personalities and capital powers belong in a content
   file the owner does not read. Never describe them in the doc, README, commit
   messages or chat.

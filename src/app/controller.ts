@@ -53,9 +53,6 @@ function mergeReports(into: AdvanceReport, from: AdvanceReport): AdvanceReport {
       for (const r of RESOURCES) target[r] += amounts[r];
     }
   }
-  for (const [cityId, n] of Object.entries(from.villagersArrived)) {
-    into.villagersArrived[Number(cityId)] = (into.villagersArrived[Number(cityId)] ?? 0) + n;
-  }
   return into;
 }
 

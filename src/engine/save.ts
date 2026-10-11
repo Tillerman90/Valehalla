@@ -8,7 +8,7 @@ import { BUILDINGS, PLANS, RESOURCES } from './types';
 import type { GameState } from './types';
 
 export const SAVE_FORMAT = 'valehalla-save';
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export interface SaveFile {
   format: typeof SAVE_FORMAT;
@@ -28,7 +28,23 @@ export type LoadResult = { ok: true; save: SaveFile } | { ok: false; reason: Loa
  * Upgrades from each older version to the next. When the state shape changes,
  * bump SAVE_VERSION and add an entry here so existing empires keep loading.
  */
-const MIGRATIONS: Record<number, (state: unknown) => unknown> = {};
+const MIGRATIONS: Record<number, (state: unknown) => unknown> = {
+  // Version 2 dropped villagers and jobs: production now follows building
+  // levels. Cities keep their buildings, stockpiles, queues and plans.
+  1: (state) => {
+    if (!isObject(state)) return state;
+    if (Array.isArray(state.cities)) {
+      for (const city of state.cities) {
+        if (!isObject(city)) continue;
+        for (const gone of ['villagers', 'villagerCarry', 'jobs', 'autoAssign', 'growthAt']) delete city[gone];
+      }
+    }
+    if (Array.isArray(state.events)) {
+      state.events = state.events.filter((e) => !isObject(e) || e.type !== 'villagerGrowth');
+    }
+    return state;
+  },
+};
 
 export function checksumOf(state: unknown): string {
   return fnv1a(JSON.stringify(state)).toString(16).padStart(8, '0');
@@ -69,12 +85,10 @@ export function isValidState(state: unknown): state is GameState {
   }
   for (const city of state.cities) {
     if (!isObject(city) || !isFiniteNumber(city.id) || typeof city.name !== 'string') return false;
-    if (typeof city.owner !== 'string' || typeof city.autoAssign !== 'boolean') return false;
-    if (!isFiniteNumber(city.villagers) || !isFiniteNumber(city.villagerCarry)) return false;
-    if (city.growthAt !== null && !isFiniteNumber(city.growthAt)) return false;
+    if (typeof city.owner !== 'string') return false;
     if (city.planCheckAt !== null && !isFiniteNumber(city.planCheckAt)) return false;
     if (city.plan !== null && !(PLANS as readonly unknown[]).includes(city.plan)) return false;
-    if (!hasFiniteResources(city.resources) || !hasFiniteResources(city.jobs)) return false;
+    if (!hasFiniteResources(city.resources)) return false;
     const levels = city.levels;
     if (!isObject(levels) || !BUILDINGS.every((b) => isFiniteNumber(levels[b]))) return false;
     if (!Array.isArray(city.traits) || !Array.isArray(city.queue)) return false;

@@ -1,7 +1,19 @@
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { HOUR, advance, createWorld, parseSave, queueBuild, serializeSave, setPlan } from '../engine';
+import {
+  HOUR,
+  SAVE_VERSION,
+  advance,
+  checksumOf,
+  createWorld,
+  parseSave,
+  populationUsed,
+  queueBuild,
+  serializeSave,
+  setPlan,
+} from '../engine';
 import type { GameState } from '../engine';
 import { GIST_FILENAME, GistBackup, GistError } from './gist';
 import type { FetchLike } from './gist';
@@ -47,7 +59,7 @@ describe('the save format', () => {
 
   it('rejects a save whose contents were changed', () => {
     const text = serializeSave(playedWorld(), 1, T0);
-    const tampered = text.replace('"villagers":', '"villagers":1');
+    const tampered = text.replace('"timber":', '"timber":9');
     expect(tampered).not.toBe(text);
     expect(parseSave(tampered)).toEqual({ ok: false, reason: 'checksum-mismatch' });
   });
@@ -70,6 +82,63 @@ describe('the save format', () => {
     // Recompute the checksum the way a buggy writer would have.
     const good = JSON.parse(serializeSave(save.state, 1, T0));
     expect(parseSave(JSON.stringify(good))).toEqual({ ok: false, reason: 'invalid-state' });
+  });
+});
+
+describe('saves from older versions', () => {
+  // A real save written by the version 1 rules, when cities had villagers and jobs.
+  const v1Text = readFileSync(new URL('../engine/fixtures/save-v1.json', import.meta.url), 'utf8');
+  const v1 = JSON.parse(v1Text);
+
+  it('loads a version 1 save and keeps the city', () => {
+    expect(v1.version).toBe(1);
+    const result = parseSave(v1Text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const before = v1.state.cities[0];
+    const after = result.save.state.cities[0]!;
+    expect(result.save.version).toBe(SAVE_VERSION);
+    expect(result.save.revision).toBe(v1.revision);
+    expect(result.save.state.worldId).toBe(v1.state.worldId);
+    expect(after.name).toBe(before.name);
+    expect(after.levels).toEqual(before.levels);
+    expect(after.resources).toEqual(before.resources);
+    expect(after.plan).toBe(before.plan);
+    expect(after.traits).toEqual(before.traits);
+    expect(result.save.state.clock).toEqual(v1.state.clock);
+    // The parts the new rules dropped are gone.
+    for (const gone of ['villagers', 'villagerCarry', 'jobs', 'autoAssign', 'growthAt']) {
+      expect(before).toHaveProperty(gone);
+      expect(after).not.toHaveProperty(gone);
+    }
+  });
+
+  it('plays on under the new rules after loading', () => {
+    const result = parseSave(v1Text);
+    if (!result.ok) throw new Error('version 1 save did not load');
+    const state = result.save.state;
+    const city = state.cities[0]!;
+    const levelsBefore = Object.values(city.levels).reduce((a, b) => a + b, 0);
+    advance(state, v1.savedAtWall + 10 * HOUR);
+    expect(Object.values(city.levels).reduce((a, b) => a + b, 0)).toBeGreaterThan(levelsBefore);
+    expect(populationUsed(city)).toBeGreaterThan(0);
+    // And saves and loads cleanly as a current save.
+    expect(parseSave(serializeSave(state, result.save.revision + 1, 0)).ok).toBe(true);
+  });
+
+  it('drops villager events an old save still had pending', () => {
+    const old = structuredClone(v1);
+    old.state.events.push({ id: 99999, at: old.state.clock.gameTime + 1000, type: 'villagerGrowth', cityId: old.state.cities[0].id });
+    old.checksum = checksumOf(old.state);
+    const result = parseSave(JSON.stringify(old));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.save.state.events.some((e) => (e.type as string) === 'villagerGrowth')).toBe(false);
+    advance(result.save.state, old.savedAtWall + HOUR);
+  });
+
+  it('still catches a damaged version 1 save', () => {
+    expect(parseSave(v1Text.replace('"timber":', '"timber":9'))).toEqual({ ok: false, reason: 'checksum-mismatch' });
   });
 });
 

@@ -2,9 +2,9 @@
 // wall clock while you play and for up to 12 hours after you leave, then
 // stops. Opening the app replays every event that came due, strictly in order.
 
-import { AWAY_CAP_MS, GROWTH_PULSE_MS, HOUR, populationCap, villagersPerHour } from './content';
+import { AWAY_CAP_MS } from './content';
 import { findCity, startNextBuild } from './build';
-import { ensureGrowth, refreshJobs, settleAll } from './economy';
+import { settleAll } from './economy';
 import { runPlan } from './plan';
 import type { AdvanceReport, GameEvent, GameState } from './types';
 
@@ -16,7 +16,6 @@ export function emptyReport(): AdvanceReport {
     clockWentBackwards: false,
     gained: {},
     wasted: {},
-    villagersArrived: {},
     builds: [],
   };
 }
@@ -38,25 +37,9 @@ function applyEvent(state: GameState, event: GameEvent, report: AdvanceReport): 
         at: event.at,
         byPlan: head.byPlan,
       });
-      refreshJobs(city);
-      ensureGrowth(state, city, event.at);
       // The next order starts the instant this one finished, not when you open the app.
       startNextBuild(state, city, event.at);
       runPlan(state, city, event.at);
-      return;
-    }
-    case 'villagerGrowth': {
-      city.growthAt = null;
-      const cap = populationCap(city.levels.farm);
-      const arriving = (villagersPerHour(city.levels.farm) * GROWTH_PULSE_MS) / HOUR + city.villagerCarry;
-      const whole = Math.min(Math.floor(arriving), Math.max(0, cap - city.villagers));
-      city.villagers += whole;
-      city.villagerCarry = city.villagers >= cap ? 0 : arriving - Math.floor(arriving);
-      if (whole > 0) {
-        report.villagersArrived[city.id] = (report.villagersArrived[city.id] ?? 0) + whole;
-        refreshJobs(city);
-      }
-      ensureGrowth(state, city, event.at);
       return;
     }
     case 'planCheck': {

@@ -2,11 +2,11 @@
 // game time, so the caller advances the world to "now" first.
 
 import { buildBlocker, findCity, placeOrder, startNextBuild } from './build';
-import { clampJobs, jobSlots, refreshJobs, settleAll } from './economy';
+import { settleAll } from './economy';
 import { removeEvents } from './events';
 import { runPlan } from './plan';
 import { RESOURCES } from './types';
-import type { ActionFailure, ActionResult, BuildingId, GameState, PlanId, Resources } from './types';
+import type { ActionFailure, ActionResult, BuildingId, GameState, PlanId } from './types';
 
 const fail = (reason: ActionFailure): ActionResult => ({ ok: false, reason });
 const OK: ActionResult = { ok: true };
@@ -19,7 +19,6 @@ export function queueBuild(state: GameState, cityId: number, building: BuildingI
   const blocker = buildBlocker(city, building);
   if (blocker) return fail(blocker);
   placeOrder(state, city, building, now, false);
-  refreshJobs(city);
   // The player just spent resources the plan may have been counting on.
   runPlan(state, city, now);
   return OK;
@@ -46,7 +45,6 @@ export function cancelBuild(state: GameState, cityId: number, queueItemId: numbe
   removeEvents(state, (e) => e.type === 'buildComplete' && removedIds.has(e.queueItemId));
   if (target.byPlan) city.plan = null;
   startNextBuild(state, city, now);
-  refreshJobs(city);
   runPlan(state, city, now);
   return OK;
 }
@@ -58,38 +56,6 @@ export function setPlan(state: GameState, cityId: number, plan: PlanId | null): 
   const now = state.clock.gameTime;
   settleAll(state, now);
   city.plan = plan;
-  refreshJobs(city);
-  runPlan(state, city, now);
-  return OK;
-}
-
-/** Put villagers on jobs by hand. Turns off automatic assignment for the city. */
-export function setJobs(state: GameState, cityId: number, jobs: Resources): ActionResult {
-  const city = findCity(state, cityId);
-  if (!city) return fail('no-such-city');
-  let total = 0;
-  for (const r of RESOURCES) {
-    const n = jobs[r];
-    if (!Number.isInteger(n) || n < 0 || n > jobSlots(city, r)) return fail('invalid-jobs');
-    total += n;
-  }
-  if (total > city.villagers) return fail('invalid-jobs');
-  const now = state.clock.gameTime;
-  settleAll(state, now);
-  city.autoAssign = false;
-  city.jobs = { ...jobs };
-  clampJobs(city);
-  runPlan(state, city, now);
-  return OK;
-}
-
-export function setAutoAssign(state: GameState, cityId: number, on: boolean): ActionResult {
-  const city = findCity(state, cityId);
-  if (!city) return fail('no-such-city');
-  const now = state.clock.gameTime;
-  settleAll(state, now);
-  city.autoAssign = on;
-  refreshJobs(city);
   runPlan(state, city, now);
   return OK;
 }

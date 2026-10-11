@@ -2,6 +2,7 @@
 // after another. Shared by player actions and by city plans.
 
 import { BUILDING_DEFS, MAX_LEVEL, buildDurationMs, queueSlots, upgradeCost } from './content';
+import { hasPopulationFor } from './economy';
 import { scheduleEvent } from './events';
 import { BUILDINGS, RESOURCES } from './types';
 import type { ActionFailure, BuildingId, City, GameState, QueueItem, Resources } from './types';
@@ -40,6 +41,7 @@ export function buildBlocker(city: City, building: BuildingId): ActionFailure | 
   if (target > MAX_LEVEL) return 'max-level';
   if (!requirementsMet(city, building)) return 'requirements';
   if (!queueHasRoom(city)) return 'queue-full';
+  if (!hasPopulationFor(city, building, target)) return 'farm-too-small';
   if (!canAfford(city, upgradeCost(building, target))) return 'cannot-afford';
   return null;
 }
