@@ -32,7 +32,8 @@ html {
   font-family: var(--font-hand);
   font-size: 17px;
   -webkit-text-size-adjust: 100%;
-  touch-action: manipulation;
+  /* Scroll up and down only: no pinch or double-tap zoom, like a native app. */
+  touch-action: pan-y;
 }
 
 body {
@@ -42,7 +43,12 @@ body {
     radial-gradient(120% 60% at 50% -10%, rgba(79, 157, 255, 0.22), transparent 60%),
     linear-gradient(180deg, #0d1a30 0%, var(--color-night) 55%);
   background-attachment: fixed;
-  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  overflow: hidden;
+  /* Game controls are not text: no selection handles or long-press menus. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -59,5 +65,105 @@ input:focus-visible {
 @media (prefers-reduced-motion: no-preference) {
   .ink-fill {
     transition: width 1s linear;
+  }
+}
+
+input[type='password'],
+input[type='text'] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.scroller {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.scroller::-webkit-scrollbar {
+  display: none;
+}
+
+/* Job sliders: a thick track and a thumb big enough for a thumb. */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 2.75rem;
+  margin: 0;
+  background: transparent;
+  touch-action: none;
+}
+.slider::-webkit-slider-runnable-track {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--color-line);
+}
+.slider::-moz-range-track {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--color-line);
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 1.9rem;
+  height: 1.9rem;
+  margin-top: -0.675rem;
+  border-radius: 50%;
+  border: 3px solid var(--color-night);
+  background: currentColor;
+  box-shadow: 0 2px 8px rgba(2, 8, 20, 0.6);
+}
+.slider::-moz-range-thumb {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  border: 3px solid var(--color-night);
+  background: currentColor;
+}
+.slider:disabled {
+  opacity: 0.35;
+}
+
+/* On and off switch. */
+.switch {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 3.3rem;
+  height: 1.95rem;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--color-line);
+  transition: background 0.15s;
+}
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 0.2rem;
+  left: 0.2rem;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 50%;
+  background: var(--color-frost);
+  transition: transform 0.15s;
+}
+.switch:checked {
+  background: var(--color-azure);
+}
+.switch:checked::after {
+  transform: translateX(1.35rem);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .toast {
+    animation: toast-in 0.18s ease-out;
+  }
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
   }
 }
