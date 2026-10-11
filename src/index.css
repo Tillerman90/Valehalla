@@ -1,0 +1,51 @@
+@import 'tailwindcss';
+@import '@fontsource/alegreya/500.css';
+@import '@fontsource/alegreya/700.css';
+@import '@fontsource/alegreya-sans/400.css';
+@import '@fontsource/alegreya-sans/500.css';
+@import '@fontsource/alegreya-sans/700.css';
+
+@theme {
+  --color-fog: #dfe3dc;
+  --color-bone: #f3f1e8;
+  --color-ink: #1e2a26;
+  --color-lichen: #5d6b63;
+  --color-moss: #4f6b4a;
+  --color-rust: #a4472f;
+  --color-tallow: #d9a441;
+  --color-rule: #b9c0b6;
+  --font-book: 'Alegreya', Georgia, serif;
+  --font-hand: 'Alegreya Sans', system-ui, sans-serif;
+}
+
+html {
+  background: var(--color-fog);
+  color: var(--color-ink);
+  font-family: var(--font-hand);
+  font-size: 17px;
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.num {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--color-moss);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ink-fill {
+    transition: width 1s linear;
+  }
+}
