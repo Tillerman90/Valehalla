@@ -162,6 +162,7 @@ lines.push('| --- | ' + BOTS.map(() => '---').join(' | ') + ' |');
 const row = (label: string, cell: (results: WorldResult[]) => string) =>
   lines.push(`| ${label} | ` + BOTS.map((b) => cell(byBot.get(b.name)!)).join(' | ') + ' |');
 row('How it plays', (r) => BOTS.find((b) => b.name === r[0]!.bot)!.description);
+row('Minutes until the first build finishes', (r) => spread(r.map((x) => x.firstBuildMinutes)));
 row('Day Keep reaches 5', (r) => spread(r.map((x) => x.keep5Day)));
 row('Day Keep reaches 10', (r) => spread(r.map((x) => x.keep10Day)));
 row('Day Court is built', (r) => spread(r.map((x) => x.courtDay)));

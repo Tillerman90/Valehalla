@@ -19,6 +19,7 @@ export function queueBuild(state: GameState, cityId: number, building: BuildingI
   const blocker = buildBlocker(city, building);
   if (blocker) return fail(blocker);
   placeOrder(state, city, building, now, false);
+  refreshJobs(city);
   // The player just spent resources the plan may have been counting on.
   runPlan(state, city, now);
   return OK;
@@ -45,6 +46,7 @@ export function cancelBuild(state: GameState, cityId: number, queueItemId: numbe
   removeEvents(state, (e) => e.type === 'buildComplete' && removedIds.has(e.queueItemId));
   if (target.byPlan) city.plan = null;
   startNextBuild(state, city, now);
+  refreshJobs(city);
   runPlan(state, city, now);
   return OK;
 }
@@ -56,6 +58,7 @@ export function setPlan(state: GameState, cityId: number, plan: PlanId | null): 
   const now = state.clock.gameTime;
   settleAll(state, now);
   city.plan = plan;
+  refreshJobs(city);
   runPlan(state, city, now);
   return OK;
 }

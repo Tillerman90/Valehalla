@@ -34,6 +34,7 @@ import {
 } from '../engine';
 import type { AdvanceReport, BuildingId, City, GameState, ResourceId, Resources } from '../engine';
 import { GameController } from './controller';
+import { updates } from './updates';
 import type { Snapshot } from './controller';
 import { ago, amount, clockTime, dateTime, duration, worldAge } from './format';
 
@@ -388,7 +389,7 @@ function Villagers({ city }: { city: City }) {
       <label className="flex min-h-12 items-center justify-between gap-3 border-b border-line py-2">
         <span>
           <span className="font-medium">Share them out for me</span>
-          <span className="block text-sm text-muted">New villagers go to work by themselves</span>
+          <span className="block text-sm text-muted">They go where the next orders need them</span>
         </span>
         <input
           type="checkbox"
@@ -701,6 +702,7 @@ function TabBar({ tab, onChange, alerts }: { tab: TabId; onChange: (tab: TabId) 
 
 export function App() {
   const snap = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
+  const updateReady = useSyncExternalStore(updates.subscribe, updates.isReady);
   const [tab, setTab] = useState<TabId>(() => {
     const saved = recall('tab');
     return TABS.includes(saved as TabId) ? (saved as TabId) : 'city';
@@ -775,7 +777,7 @@ export function App() {
             <Saves snap={snap} />
             <p className="mt-6 text-sm text-muted">
               Valehalla, phase 0 test build. This page exists to prove the engine and the saves on your phone. The real
-              game screens come next.
+              game screens come next. <span className="num">Version {__BUILD_ID__}.</span>
             </p>
           </>
         )}
@@ -792,6 +794,12 @@ export function App() {
           </div>
         )}
       </div>
+      {updateReady && (
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-azure bg-raised px-4 py-2">
+          <span>A new version of the game is ready.</span>
+          <Button onClick={() => updates.apply()}>Update</Button>
+        </div>
+      )}
       <TabBar tab={tab} onChange={changeTab} alerts={alerts} />
     </div>
   );

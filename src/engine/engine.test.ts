@@ -39,6 +39,12 @@ const T0 = Date.UTC(2026, 0, 1);
 const newWorld = (seed = 'test') => createWorld({ seed, wallNow: T0 });
 const capital = (state: GameState) => state.cities[0]!;
 
+/** A modest stockpile, for tests about orders rather than about gathering. */
+function stock(state: GameState, amount = 400) {
+  const city = capital(state);
+  city.resources = { food: amount, timber: amount, metal: amount, wealth: 0 };
+}
+
 /** Give the city plenty of everything, for tests that are not about affording things. */
 function enrich(state: GameState, amount = 1e9) {
   for (const r of RESOURCES) capital(state).resources[r] = amount;
@@ -208,6 +214,7 @@ describe('the build queue', () => {
   it('charges for an order and builds it on time', () => {
     const state = newWorld();
     const city = capital(state);
+    stock(state);
     const cost = upgradeCost('farm', 2);
     const before = { ...city.resources };
     expect(queueBuild(state, city.id, 'farm')).toEqual({ ok: true });
@@ -267,6 +274,7 @@ describe('the build queue', () => {
   it('refunds a cancelled order in full and starts the next one', () => {
     const state = newWorld();
     const city = capital(state);
+    stock(state);
     const before = { ...city.resources };
     queueBuild(state, city.id, 'farm');
     queueBuild(state, city.id, 'mine');
@@ -362,17 +370,62 @@ describe('the economy', () => {
     expect(empireIncome(state, city.owner).cap).toBe(incomeCap(10));
   });
 
-  it('spreads villagers evenly and respects job slots', () => {
+  it('fills every job slot when there are villagers to spare', () => {
     const state = newWorld('plain');
     const city = capital(state);
     city.villagers = 40;
     autoAssign(city);
     // No Market yet, so three jobs with 6 slots each.
     expect(city.jobs).toEqual({ food: 6, timber: 6, metal: 6, wealth: 0 });
-    city.villagers = 8;
+  });
+
+  it('sends villagers where the next orders are short', () => {
+    const state = newWorld('plain');
+    const city = capital(state);
+    city.traits = [];
+    city.levels.farm = city.levels.lumberCamp = city.levels.mine = 8;
+    city.villagers = 20;
+    // Plenty of food and metal in store, no timber at all.
+    city.resources = { food: 5000, timber: 0, metal: 5000, wealth: 0 };
     autoAssign(city);
-    expect(city.jobs.food + city.jobs.timber + city.jobs.metal).toBe(8);
-    expect(Math.max(city.jobs.food, city.jobs.timber, city.jobs.metal)).toBe(3);
+    expect(city.jobs.timber).toBeGreaterThan(city.jobs.food * 3);
+    expect(city.jobs.timber).toBeGreaterThan(city.jobs.metal * 3);
+    expect(city.jobs.food + city.jobs.timber + city.jobs.metal).toBe(20);
+    // The other jobs keep a trickle going.
+    expect(city.jobs.food).toBeGreaterThan(0);
+    expect(city.jobs.metal).toBeGreaterThan(0);
+    // When timber is in store and metal runs out, they move.
+    city.resources = { food: 5000, timber: 5000, metal: 0, wealth: 0 };
+    autoAssign(city);
+    expect(city.jobs.metal).toBeGreaterThan(city.jobs.timber * 3);
+  });
+
+  it('never gives a job more villagers than it has slots, and spills the rest to other jobs', () => {
+    const state = newWorld('plain');
+    const city = capital(state);
+    city.levels.lumberCamp = 1; // 6 slots
+    city.levels.farm = city.levels.mine = 8;
+    city.villagers = 30;
+    city.resources = { food: 5000, timber: 0, metal: 5000, wealth: 0 };
+    autoAssign(city);
+    expect(city.jobs.timber).toBe(6);
+    expect(city.jobs.food + city.jobs.timber + city.jobs.metal).toBe(30);
+  });
+
+  it('follows the city plan when sharing villagers out', () => {
+    const state = newWorld('plain');
+    const city = capital(state);
+    city.traits = [];
+    for (const b of BUILDINGS) city.levels[b] = 8;
+    city.villagers = 60;
+    city.resources = { food: 0, timber: 0, metal: 0, wealth: 0 };
+    city.plan = 'economy';
+    autoAssign(city);
+    const economy = { ...city.jobs };
+    city.plan = 'barracks';
+    autoAssign(city);
+    // A Barracks town's next orders cost far more food than an Economy city's.
+    expect(city.jobs.food).toBeGreaterThan(economy.food);
   });
 
   it('rejects job choices the city cannot staff', () => {
@@ -408,9 +461,27 @@ describe('the economy', () => {
 });
 
 describe('city plans', () => {
+  it('founds a city with nothing in store', () => {
+    const city = capital(newWorld('scratch'));
+    expect(city.resources).toEqual({ food: 0, timber: 0, metal: 0, wealth: 0 });
+    // It can still get going: its first villagers are already at work.
+    expect(city.jobs.food + city.jobs.timber + city.jobs.metal).toBe(city.villagers);
+  });
+
+  it('builds an economy from nothing while you are away', () => {
+    const state = newWorld('scratch');
+    const city = capital(state);
+    setPlan(state, city.id, 'economy');
+    expect(city.queue).toHaveLength(0);
+    const report = advance(state, T0 + 12 * HOUR);
+    expect(report.builds.length).toBeGreaterThan(10);
+    expect(city.levels.keep).toBeGreaterThan(1);
+  });
+
   it('keeps the queue full while you are away', () => {
     const state = newWorld('plan');
     const city = capital(state);
+    stock(state);
     setPlan(state, city.id, 'economy');
     expect(city.queue).toHaveLength(2);
     expect(city.queue.every((q) => q.byPlan)).toBe(true);
@@ -460,6 +531,7 @@ describe('city plans', () => {
   it('pauses when the player cancels one of its orders', () => {
     const state = newWorld('plan');
     const city = capital(state);
+    stock(state);
     setPlan(state, city.id, 'economy');
     cancelBuild(state, city.id, city.queue[0]!.id);
     expect(city.plan).toBeNull();
@@ -468,6 +540,7 @@ describe('city plans', () => {
   it('leaves room for the player and works around their orders', () => {
     const state = newWorld('plan');
     const city = capital(state);
+    stock(state);
     queueBuild(state, city.id, 'storehouse');
     setPlan(state, city.id, 'economy');
     expect(city.queue[0]!.byPlan).toBe(false);

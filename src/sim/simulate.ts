@@ -1,7 +1,7 @@
 // Runs one world from founding for a number of days with a bot at the
 // controls, using a simulated wall clock, and records what happened.
 
-import { DAY, HOUR } from '../engine/content';
+import { DAY, HOUR, MINUTE } from '../engine/content';
 import { advance } from '../engine/advance';
 import { createWorld } from '../engine/world';
 import { RESOURCES, zeroResources } from '../engine/types';
@@ -17,6 +17,8 @@ export interface WorldResult {
   bot: string;
   days: number;
   /** Wall-clock day each milestone was first seen at a check-in. Null if never. */
+  /** Minutes of play before the first build finishes. */
+  firstBuildMinutes: number | null;
   keep5Day: number | null;
   keep10Day: number | null;
   courtDay: number | null;
@@ -46,6 +48,7 @@ export function simulateWorld(seed: string, bot: Bot, days: number): WorldResult
     seed,
     bot: bot.name,
     days,
+    firstBuildMinutes: null,
     keep5Day: null,
     keep10Day: null,
     courtDay: null,
@@ -66,6 +69,9 @@ export function simulateWorld(seed: string, bot: Bot, days: number): WorldResult
 
   const observe = (wall: number) => {
     const report = advance(state, wall);
+    if (result.firstBuildMinutes === null && report.builds.length > 0) {
+      result.firstBuildMinutes = report.builds[0]!.at / MINUTE;
+    }
     // Stop counting once the city is finished: with nothing left to buy, everything overflows.
     if (result.fullyBuiltDay === null) {
       for (const g of Object.values(report.gained)) for (const r of RESOURCES) gained[r] += g[r];

@@ -4,9 +4,9 @@
 
 import { MAX_LEVEL, PLAN_DEFS, storageCap, upgradeCost } from '../engine/content';
 import { queueBuild, setPlan } from '../engine/actions';
-import { buildBlocker, canAfford, nextTargetLevel, upgradeable } from '../engine/build';
+import { buildBlocker, canAfford, nextTargetLevel, rankWishes, upgradeable } from '../engine/build';
 import { cityRates } from '../engine/economy';
-import { clearTheWay, rankWishes } from '../engine/plan';
+import { clearTheWay } from '../engine/plan';
 import { BUILDINGS, RESOURCES } from '../engine/types';
 import type { BuildingId, City, GameState, PlanId } from '../engine/types';
 

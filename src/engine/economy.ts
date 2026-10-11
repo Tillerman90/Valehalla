@@ -5,17 +5,22 @@
 import {
   GROWTH_PULSE_MS,
   HOUR,
+  JOBS_EVEN_SHARE,
+  JOBS_LOOK_AHEAD,
   JOB_BUILDING,
+  PLAN_DEFS,
   TRAIT_YIELD,
   YIELD_PER_HOUR,
   incomeCap,
   populationCap,
   storageCap,
+  upgradeCost,
   workerSlots,
 } from './content';
+import { nextTargetLevel, rankWishes } from './build';
 import { scheduleEvent } from './events';
-import { RESOURCES, zeroResources } from './types';
-import type { AdvanceReport, City, GameState, ResourceId, Resources } from './types';
+import { BUILDINGS, RESOURCES, zeroResources } from './types';
+import type { AdvanceReport, BuildingId, City, GameState, ResourceId, Resources } from './types';
 
 export function jobSlots(city: City, resource: ResourceId): number {
   return workerSlots(city.levels[JOB_BUILDING[resource]]);
@@ -99,35 +104,85 @@ export function settleAll(state: GameState, to: number, report?: AdvanceReport):
   state.settledAt = to;
 }
 
+const NO_LEAD = Object.fromEntries(BUILDINGS.map((b) => [b, 0])) as Record<BuildingId, number>;
+
 /**
- * Spread villagers evenly across the four jobs, respecting each building's
- * slots. Anyone left over when every slot is full stays idle.
+ * What the city is short of for the orders it is likely to place next: the
+ * next few buildings its plan wants (or, with no plan, its least developed
+ * ones), less what is already in the Storehouse.
+ */
+export function upcomingNeeds(city: City): Resources {
+  const lead = city.plan ? PLAN_DEFS[city.plan].lead : NO_LEAD;
+  const cost = zeroResources();
+  for (const wish of rankWishes(city, lead).slice(0, JOBS_LOOK_AHEAD)) {
+    const price = upgradeCost(wish.building, nextTargetLevel(city, wish.building));
+    for (const r of RESOURCES) cost[r] += price[r];
+  }
+  const short = zeroResources();
+  let anyShort = false;
+  for (const r of RESOURCES) {
+    short[r] = Math.max(0, cost[r] - city.resources[r]);
+    if (short[r] > 0) anyShort = true;
+  }
+  // With everything already in stock, keep the mix those orders will use up.
+  return anyShort ? short : cost;
+}
+
+/**
+ * Put villagers where the next orders need them. Each job's share follows
+ * how much of its resource the city is short of, so everything an order
+ * needs arrives at about the same time. A small even share keeps a trickle
+ * of every resource coming, and nobody is given a job with no free slot.
  */
 export function autoAssign(city: City): void {
   const slots = zeroResources();
   for (const r of RESOURCES) slots[r] = jobSlots(city, r);
+  const open: ResourceId[] = RESOURCES.filter((r) => slots[r] > 0);
   const jobs = zeroResources();
-  let left = city.villagers;
-  let open: ResourceId[] = RESOURCES.filter((r) => slots[r] > 0);
-  while (left > 0 && open.length > 0) {
-    const share = Math.floor(left / open.length);
-    if (share === 0) {
-      // Fewer villagers than open jobs: hand them out one each, in a fixed order.
-      for (const r of open) {
-        if (left === 0) break;
-        jobs[r] += 1;
-        left -= 1;
-      }
-      break;
-    }
-    for (const r of open) {
-      const give = Math.min(share, slots[r] - jobs[r]);
-      jobs[r] += give;
-      left -= give;
-    }
-    open = open.filter((r) => jobs[r] < slots[r]);
-  }
   city.jobs = jobs;
+  if (open.length === 0 || city.villagers <= 0) return;
+
+  const needs = upcomingNeeds(city);
+  const share = zeroResources();
+  let totalWork = 0;
+  for (const r of open) {
+    // Villager-hours of work this resource needs.
+    share[r] = needs[r] / (YIELD_PER_HOUR[r] * traitMultiplier(city, r));
+    totalWork += share[r];
+  }
+  for (const r of open) {
+    const byNeed = totalWork > 0 ? share[r] / totalWork : 1 / open.length;
+    share[r] = (1 - JOBS_EVEN_SHARE) * byNeed + JOBS_EVEN_SHARE / open.length;
+  }
+
+  // Hand villagers out by share. When a job fills up, the rest are shared
+  // again among the jobs that still have room.
+  let left = Math.min(city.villagers, open.reduce((sum, r) => sum + slots[r], 0));
+  let free = open;
+  while (left > 0 && free.length > 0) {
+    const weight = free.reduce((sum, r) => sum + share[r], 0);
+    const wanted = free.map((r) => ({ r, exact: (left * share[r]) / weight }));
+    let given = 0;
+    for (const w of wanted) {
+      const n = Math.min(Math.floor(w.exact), slots[w.r] - jobs[w.r]);
+      jobs[w.r] += n;
+      given += n;
+    }
+    // Rounding leaves a few over: they go to the largest remainders first.
+    const byRemainder = wanted
+      .filter((w) => jobs[w.r] < slots[w.r])
+      .sort((a, b) => b.exact - Math.floor(b.exact) - (a.exact - Math.floor(a.exact)) || RESOURCES.indexOf(a.r) - RESOURCES.indexOf(b.r));
+    for (const w of byRemainder) {
+      if (given >= left) break;
+      if (jobs[w.r] < slots[w.r]) {
+        jobs[w.r] += 1;
+        given += 1;
+      }
+    }
+    if (given === 0) break;
+    left -= given;
+    free = free.filter((r) => jobs[r] < slots[r]);
+  }
 }
 
 /** Pull villagers out of jobs that no longer have room for them. */

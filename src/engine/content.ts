@@ -190,7 +190,8 @@ export const TRAIT_YIELD: Record<TraitId, Partial<Resources>> = {
   hilltop: {},
 };
 
-export const STARTING_RESOURCES: Resources = { food: 400, timber: 400, metal: 400, wealth: 0 };
+/** A founding city starts with nothing in store. Its first villagers have to gather it. */
+export const STARTING_RESOURCES: Resources = { food: 0, timber: 0, metal: 0, wealth: 0 };
 export const STARTING_VILLAGERS = 12;
 
 export function upgradeCost(building: BuildingId, targetLevel: number): Resources {
@@ -317,3 +318,8 @@ export const PLAN_DEFS: Record<PlanId, PlanDef> = {
 /** The plan looks again at least this often while it is saving up. */
 export const PLAN_RECHECK_MAX_MS = 30 * MINUTE;
 export const PLAN_RECHECK_MIN_MS = MINUTE;
+
+/** How many upcoming orders the villagers look ahead to when sharing themselves out. */
+export const JOBS_LOOK_AHEAD = 3;
+/** The part of the workforce always spread evenly, so no resource dries up completely. */
+export const JOBS_EVEN_SHARE = 0.15;

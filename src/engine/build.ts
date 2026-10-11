@@ -77,3 +77,15 @@ export function placeOrder(
   startNextBuild(state, city, now);
   return item;
 }
+
+export interface Wish {
+  building: BuildingId;
+  score: number;
+}
+
+/** Order buildings by how far each is behind where the lead table wants it. Lowest score first. */
+export function rankWishes(city: City, lead: Record<BuildingId, number>): Wish[] {
+  return upgradeable(city)
+    .map((b) => ({ building: b, score: nextTargetLevel(city, b) - lead[b] }))
+    .sort((x, y) => x.score - y.score || BUILDINGS.indexOf(x.building) - BUILDINGS.indexOf(y.building));
+}

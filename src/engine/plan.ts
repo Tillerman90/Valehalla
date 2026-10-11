@@ -12,23 +12,11 @@ import {
   storageCap,
   upgradeCost,
 } from './content';
-import { canAfford, nextTargetLevel, placeOrder, queueHasRoom, upgradeable } from './build';
-import { cityRates } from './economy';
+import { canAfford, nextTargetLevel, placeOrder, queueHasRoom, rankWishes, upgradeable } from './build';
+import { cityRates, refreshJobs } from './economy';
 import { removeEvents, scheduleEvent } from './events';
-import { BUILDINGS, RESOURCES } from './types';
+import { RESOURCES } from './types';
 import type { BuildingId, City, GameState, Resources } from './types';
-
-export interface Wish {
-  building: BuildingId;
-  score: number;
-}
-
-/** Order buildings by how far each is behind where the lead table wants it. Lowest score first. */
-export function rankWishes(city: City, lead: Record<BuildingId, number>): Wish[] {
-  return upgradeable(city)
-    .map((b) => ({ building: b, score: nextTargetLevel(city, b) - lead[b] }))
-    .sort((x, y) => x.score - y.score || BUILDINGS.indexOf(x.building) - BUILDINGS.indexOf(y.building));
-}
 
 /**
  * If waiting alone will never pay for this building, return the building
@@ -98,8 +86,11 @@ export function runPlan(state: GameState, city: City, now: number): void {
     const cost = upgradeCost(choice, nextTargetLevel(city, choice));
     if (canAfford(city, cost)) {
       placeOrder(state, city, choice, now, true);
+      refreshJobs(city);
       continue;
     }
+    // Point the villagers at whatever this order is short of before timing the wait.
+    refreshJobs(city);
     const wait = timeToAfford(state, city, cost);
     if (wait === null) return;
     // Income can rise before then (new villagers), so never sleep too long,
