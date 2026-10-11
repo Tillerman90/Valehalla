@@ -1,7 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#1e2a26"/>
-  <path d="M0 512 L0 300 L150 150 L256 290 L362 150 L512 300 L512 512 Z" fill="#4f6b4a"/>
-  <path d="M0 512 L0 380 L256 290 L512 380 L512 512 Z" fill="#dfe3dc"/>
-  <path d="M206 372 V250 h22 v24 h18 v-24 h20 v24 h18 v-24 h22 V372 Z" fill="#1e2a26"/>
-  <rect x="242" y="320" width="28" height="52" fill="#d9a441"/>
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16305c"/><stop offset="1" stop-color="#0a1322"/></linearGradient></defs>
+  <rect width="512" height="512" fill="url(#sky)"/>
+  <circle cx="380" cy="120" r="44" fill="#9bd0ff"/>
+  <path d="M0 512 L0 300 L150 150 L256 290 L362 150 L512 300 L512 512 Z" fill="#274a82"/>
+  <path d="M0 512 L0 380 L256 290 L512 380 L512 512 Z" fill="#13223b"/>
+  <path d="M206 372 V250 h22 v24 h18 v-24 h20 v24 h18 v-24 h22 V372 Z" fill="#4f9dff"/>
+  <rect x="242" y="320" width="28" height="52" fill="#f4bf4f"/>
 </svg>

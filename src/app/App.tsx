@@ -47,10 +47,10 @@ const JOB_NAMES: Record<ResourceId, string> = {
 
 function Section({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
   return (
-    <section className="mt-9">
-      <div className="flex items-baseline justify-between border-b border-ink pb-1">
-        <h2 className="font-book text-[1.4rem] font-bold leading-tight">{title}</h2>
-        {aside && <span className="num text-sm text-lichen">{aside}</span>}
+    <section className="mt-4 rounded-2xl border border-line bg-panel px-4 pb-4 pt-3.5 shadow-[0_8px_24px_rgba(2,8,20,0.45)]">
+      <div className="flex items-baseline justify-between border-b border-line pb-2">
+        <h2 className="font-book text-[1.4rem] font-bold leading-tight text-ice">{title}</h2>
+        {aside && <span className="num rounded-full bg-raised px-2.5 py-0.5 text-sm text-muted">{aside}</span>}
       </div>
       {children}
     </section>
@@ -71,16 +71,16 @@ function Button({
   danger?: boolean;
 }) {
   const look = danger
-    ? 'border-rust text-rust'
+    ? 'border-ember bg-ember/10 text-ember'
     : quiet
-      ? 'border-ink text-ink'
-      : 'border-ink bg-ink text-bone';
+      ? 'border-line bg-raised text-frost'
+      : 'border-azure bg-azure text-night shadow-[0_0_0_1px_rgba(140,200,255,0.25),0_6px_16px_rgba(79,157,255,0.28)]';
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`min-h-11 rounded-sm border px-3.5 py-2 text-[0.95rem] font-medium leading-tight active:translate-y-px disabled:border-rule disabled:bg-transparent disabled:text-lichen ${look}`}
+      className={`min-h-11 rounded-lg border px-3.5 py-2 text-[0.95rem] font-bold leading-tight active:translate-y-px disabled:border-line disabled:bg-transparent disabled:text-muted/70 disabled:shadow-none ${look}`}
     >
       {children}
     </button>
@@ -90,31 +90,51 @@ function Button({
 function costText(cost: Resources, city: City): ReactNode {
   const parts = RESOURCES.filter((r) => cost[r] > 0);
   return parts.map((r, i) => (
-    <span key={r} className={city.resources[r] < cost[r] ? 'text-rust' : undefined}>
+    <span key={r} className={city.resources[r] < cost[r] ? 'text-ember' : undefined}>
       {amount(cost[r])} {RESOURCE_NAMES[r].toLowerCase()}
       {i < parts.length - 1 ? ', ' : ''}
     </span>
   ));
 }
 
+const RESOURCE_TEXT: Record<ResourceId, string> = {
+  food: 'text-food',
+  timber: 'text-timber',
+  metal: 'text-metal',
+  wealth: 'text-wealth',
+};
+const RESOURCE_FILL: Record<ResourceId, string> = {
+  food: 'bg-food',
+  timber: 'bg-timber',
+  metal: 'bg-metal',
+  wealth: 'bg-wealth',
+};
+
 function ResourceStrip({ state, city }: { state: GameState; city: City }) {
   const rates = cityRates(state, city);
   const cap = storageCap(city.levels.storehouse);
   return (
-    <div className="sticky top-0 z-10 -mx-4 border-b border-ink bg-fog px-4 pt-[max(0.5rem,env(safe-area-inset-top))]">
-      <div className="grid grid-cols-4 gap-3 pb-2">
+    <div className="sticky top-0 z-10 -mx-4 border-b border-line bg-deep/95 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur">
+      <div className="grid grid-cols-4 gap-2">
         {RESOURCES.map((r) => {
           const full = city.resources[r] >= cap;
           return (
-            <div key={r}>
-              <div className="text-[0.8rem] text-lichen">{RESOURCE_NAMES[r]}</div>
-              <div className={`num text-[1.25rem] font-bold leading-tight ${full ? 'text-rust' : ''}`}>
-                {amount(city.resources[r])}
+            <div key={r} className="overflow-hidden rounded-xl border border-line bg-panel">
+              <div className="px-2 pb-1.5 pt-1.5">
+                <div className={`flex items-center gap-1.5 text-[0.8rem] font-medium ${RESOURCE_TEXT[r]}`}>
+                  <span className={`size-2 rounded-full ${RESOURCE_FILL[r]}`} />
+                  {RESOURCE_NAMES[r]}
+                </div>
+                <div className={`num text-[1.3rem] font-bold leading-tight ${full ? 'text-ember' : 'text-frost'}`}>
+                  {amount(city.resources[r])}
+                </div>
+                <div className={`num text-[0.75rem] ${full ? 'text-ember' : 'text-muted'}`}>
+                  {full ? 'Full' : `+${amount(rates[r])} an hour`}
+                </div>
               </div>
-              <div className="num text-[0.8rem] text-lichen">{full ? 'full' : `+${amount(rates[r])} an hour`}</div>
-              <div className="mt-1 h-[3px] bg-rule">
+              <div className="h-1 bg-line">
                 <div
-                  className={`h-full ${full ? 'bg-rust' : 'bg-moss'}`}
+                  className={`h-full ${full ? 'bg-ember' : RESOURCE_FILL[r]}`}
                   style={{ width: `${Math.min(100, (city.resources[r] / cap) * 100)}%` }}
                 />
               </div>
@@ -134,8 +154,8 @@ function AwayReport({ report, city, onDismiss }: { report: AdvanceReport; city: 
   for (const build of report.builds) finished.set(build.building, build.level);
   const lost = wasted ? RESOURCES.filter((r) => wasted[r] >= 1) : [];
   return (
-    <div className="mt-5 border-l-4 border-moss bg-bone px-4 py-3">
-      <h2 className="font-book text-[1.4rem] font-bold leading-tight">While you were away</h2>
+    <div className="mt-4 rounded-2xl border border-azure/60 bg-raised px-4 py-3.5 shadow-[0_0_28px_rgba(79,157,255,0.18)]">
+      <h2 className="font-book text-[1.4rem] font-bold leading-tight text-ice">While you were away</h2>
       <p className="mt-1">
         You were gone {duration(report.wallElapsedMs)}.
         {report.frozenMs > 0
@@ -157,7 +177,7 @@ function AwayReport({ report, city, onDismiss }: { report: AdvanceReport; city: 
         </p>
       )}
       {lost.length > 0 && wasted && (
-        <p className="num mt-2 text-rust">
+        <p className="num mt-2 text-ember">
           The Storehouse was full, so {lost.map((r) => `${amount(wasted[r])} ${RESOURCE_NAMES[r].toLowerCase()}`).join(', ')}{' '}
           went to waste.
         </p>
@@ -176,7 +196,7 @@ function Queue({ state, city }: { state: GameState; city: City }) {
   return (
     <Section title="Under construction" aside={`${city.queue.length} of ${slots} orders`}>
       {city.queue.length === 0 && (
-        <p className="py-3 text-lichen">Nothing is being built. Order an upgrade below, or choose a city plan.</p>
+        <p className="py-3 text-muted">Nothing is being built. Order an upgrade below, or choose a city plan.</p>
       )}
       {city.queue.map((item) => {
         const running = item.startedAt !== null && item.completesAt !== null;
@@ -184,16 +204,16 @@ function Queue({ state, city }: { state: GameState; city: City }) {
         const left = running ? Math.max(0, item.completesAt! - state.clock.gameTime) : 0;
         const done = running && total > 0 ? 1 - left / total : 0;
         return (
-          <div key={item.id} className="relative border-b border-rule">
+          <div key={item.id} className="relative border-b border-line">
             {running && (
-              <div className="ink-fill absolute inset-y-0 left-0 bg-tallow/45" style={{ width: `${done * 100}%` }} />
+              <div className="ink-fill absolute inset-y-0 left-0 rounded-r-md border-b-2 border-azure bg-gradient-to-r from-azure/10 to-azure/30" style={{ width: `${done * 100}%` }} />
             )}
             <div className="relative flex items-center justify-between gap-3 py-2.5">
               <div>
                 <div className="font-book text-[1.15rem] font-medium leading-tight">
                   {BUILDING_DEFS[item.building].name} {item.targetLevel}
                 </div>
-                <div className="num text-sm text-lichen">
+                <div className="num text-sm text-muted">
                   {running
                     ? `${duration(left)} left, done at ${clockTime(wallTimeOf(state, item.completesAt!))}`
                     : 'Waiting its turn'}
@@ -215,7 +235,7 @@ function Plan({ city }: { city: City }) {
   const choices = [null, ...PLANS];
   return (
     <Section title="City plan">
-      <p className="py-2 text-lichen">
+      <p className="py-2 text-muted">
         {city.plan
           ? `${PLAN_DEFS[city.plan].summary} The plan places orders by itself, even while the game is closed.`
           : 'No plan. Every order is yours to place.'}
@@ -229,8 +249,8 @@ function Plan({ city }: { city: City }) {
               type="button"
               aria-pressed={chosen}
               onClick={() => controller.act((s) => setPlan(s, city.id, plan))}
-              className={`min-h-11 rounded-sm border px-1 py-2 text-[0.9rem] font-medium leading-tight ${
-                chosen ? 'border-ink bg-ink text-bone' : 'border-ink text-ink'
+              className={`min-h-11 rounded-lg border px-1 py-2 text-[0.9rem] font-bold leading-tight ${
+                chosen ? 'border-azure bg-azure text-night' : 'border-line bg-raised text-frost'
               }`}
             >
               {plan ? PLAN_DEFS[plan].name : 'By hand'}
@@ -271,15 +291,15 @@ function Buildings({ city }: { city: City }) {
         const cost = atCap ? null : upgradeCost(b, target);
         const tooBig = cost ? RESOURCES.some((r) => cost[r] > storageCap(city.levels.storehouse)) : false;
         return (
-          <div key={b} className="flex items-center justify-between gap-3 border-b border-rule py-2.5">
+          <div key={b} className="flex items-center justify-between gap-3 border-b border-line py-2.5">
             <div className="min-w-0">
               <div className="font-book text-[1.15rem] font-medium leading-tight">
                 {BUILDING_DEFS[b].name}{' '}
-                <span className="num font-hand text-[0.95rem] font-normal text-lichen">
+                <span className="num font-hand text-[0.95rem] font-normal text-muted">
                   {city.levels[b] === 0 ? 'not built' : `level ${city.levels[b]}`}
                 </span>
               </div>
-              <div className="num text-sm leading-snug text-lichen">
+              <div className="num text-sm leading-snug text-muted">
                 {cost ? (
                   <>
                     {costText(cost, city)}, {duration(buildDurationMs(b, target, city.levels.keep))}
@@ -289,9 +309,9 @@ function Buildings({ city }: { city: City }) {
                 )}
               </div>
               {cost && blocker && blocker !== 'Not enough resources' && (
-                <div className="text-sm leading-snug text-lichen">{blocker}</div>
+                <div className="text-sm leading-snug text-muted">{blocker}</div>
               )}
-              {tooBig && <div className="text-sm leading-snug text-rust">Costs more than the Storehouse can hold</div>}
+              {tooBig && <div className="text-sm leading-snug text-ember">Costs more than the Storehouse can hold</div>}
             </div>
             <div className="shrink-0">
               <Button disabled={blocker !== null} onClick={() => controller.act((s) => queueBuild(s, city.id, b))}>
@@ -312,16 +332,16 @@ function Villagers({ city }: { city: City }) {
     controller.act((s) => setJobs(s, city.id, { ...city.jobs, [r]: city.jobs[r] + by }));
   return (
     <Section title="Villagers" aside={`${city.villagers} of ${populationCap(city.levels.farm)}`}>
-      <p className="py-2 text-lichen">
+      <p className="py-2 text-muted">
         {idle > 0 ? `${idle} have no work. Raise a job building to make room for them.` : 'Everyone has work.'}
       </p>
       {RESOURCES.map((r) => {
         const slots = jobSlots(city, r);
         return (
-          <div key={r} className="flex items-center justify-between gap-3 border-b border-rule py-2">
+          <div key={r} className="flex items-center justify-between gap-3 border-b border-line py-2">
             <div>
               <span className="font-medium">{JOB_NAMES[r]}</span>{' '}
-              <span className="num text-lichen">{slots === 0 ? 'no building yet' : `${city.jobs[r]} of ${slots}`}</span>
+              <span className="num text-muted">{slots === 0 ? 'no building yet' : `${city.jobs[r]} of ${slots}`}</span>
             </div>
             <div className="flex gap-2">
               <Button quiet disabled={city.autoAssign || city.jobs[r] <= 0} onClick={() => change(r, -1)}>
@@ -337,7 +357,7 @@ function Villagers({ city }: { city: City }) {
       <label className="mt-3 flex min-h-11 items-center gap-3">
         <input
           type="checkbox"
-          className="size-5 accent-[#4f6b4a]"
+          className="size-5 accent-[#4f9dff]"
           checked={city.autoAssign}
           onChange={(e) => controller.act((s) => setAutoAssign(s, city.id, e.target.checked))}
         />
@@ -414,22 +434,22 @@ function Saves({ snap }: { snap: Snapshot }) {
           ? `Saved to this phone ${ago(save.lastLocalSaveAt, snap.now)}. Save number ${save.revision}.`
           : 'Not saved yet.'}
       </p>
-      <p className="text-lichen">
+      <p className="text-muted">
         The game saves after every order and every few seconds.{' '}
         {snap.storageProtected === true && 'This phone has agreed to keep the save from being cleared automatically.'}
         {snap.storageProtected === false &&
           'This phone has not promised to keep the save. Installing to the home screen and turning on cloud backup makes it safe.'}
       </p>
       {snap.notices.map((notice) => (
-        <p key={notice} className="mt-2 text-rust">
+        <p key={notice} className="mt-2 text-ember">
           {notice}
         </p>
       ))}
 
-      <h3 className="mt-6 font-book text-[1.15rem] font-bold">Cloud backup</h3>
+      <h3 className="mt-6 font-book text-[1.15rem] font-bold text-ice">Cloud backup</h3>
       {!save.hasToken ? (
         <>
-          <p className="py-1 text-lichen">
+          <p className="py-1 text-muted">
             Paste a GitHub token that is allowed to use Gists. The game then copies your save to a private Gist every few
             minutes, and can bring it back on a new or wiped phone.
           </p>
@@ -441,7 +461,7 @@ function Saves({ snap }: { snap: Snapshot }) {
               placeholder="GitHub token"
               aria-label="GitHub token"
               autoComplete="off"
-              className="min-h-11 min-w-0 flex-1 rounded-sm border border-ink bg-bone px-3"
+              className="min-h-11 min-w-0 flex-1 rounded-lg border border-line bg-night px-3 text-frost placeholder:text-muted"
             />
             <Button
               disabled={token.trim().length < 20}
@@ -467,7 +487,7 @@ function Saves({ snap }: { snap: Snapshot }) {
                   : 'Backup is on. The first copy goes up in a moment.'}
           </p>
           {snap.cloudConflict && (
-            <div className="mt-2 border-l-4 border-rust bg-bone px-4 py-3">
+            <div className="mt-2 rounded-xl border border-ember/60 bg-ember/10 px-4 py-3">
               <p>
                 The cloud already holds {snap.cloudConflict.worldId === snap.state?.worldId ? 'a newer copy of this empire' : 'a different empire'}
                 : save number {snap.cloudConflict.revision}, {worldAge(snap.cloudConflict.gameTime).toLowerCase()}, last saved{' '}
@@ -506,7 +526,7 @@ function Saves({ snap }: { snap: Snapshot }) {
         </>
       )}
 
-      <h3 className="mt-6 font-book text-[1.15rem] font-bold">Save file</h3>
+      <h3 className="mt-6 font-book text-[1.15rem] font-bold text-ice">Save file</h3>
       <div className="mt-2 flex flex-wrap gap-2">
         <Button quiet onClick={() => void exportFile()}>
           Export save file
@@ -526,10 +546,10 @@ function Saves({ snap }: { snap: Snapshot }) {
           }}
         />
       </div>
-      {message && <p className="mt-2 text-rust">{message}</p>}
+      {message && <p className="mt-2 text-ember">{message}</p>}
 
-      <h3 className="mt-6 font-book text-[1.15rem] font-bold">Start over</h3>
-      <p className="py-1 text-lichen">Founds a new city in a new world. The current world is replaced.</p>
+      <h3 className="mt-6 font-book text-[1.15rem] font-bold text-ice">Start over</h3>
+      <p className="py-1 text-muted">Founds a new city in a new world. The current world is replaced.</p>
       <ConfirmButton
         label="Start a new world"
         confirmLabel="Yes, abandon this world"
@@ -545,7 +565,7 @@ function InstallHint() {
     (navigator as Navigator & { standalone?: boolean }).standalone === true;
   if (standalone) return null;
   return (
-    <p className="mt-4 border-l-4 border-tallow bg-bone px-4 py-3">
+    <p className="mt-4 rounded-2xl border border-gold/50 bg-gold/10 px-4 py-3 text-frost">
       To install on an iPhone, open this page in Safari, tap Share, then Add to Home Screen. Play from the home screen
       icon: Safari and the installed game keep separate saves.
     </p>
@@ -561,20 +581,28 @@ export function App() {
   const state = snap.state;
   const city = state?.cities[0];
   if (snap.phase === 'loading' || !state || !city) {
-    return <p className="p-6 font-book text-xl">Opening the ledger.</p>;
+    return <p className="p-6 font-book text-xl text-ice">Opening the gates.</p>;
   }
-  const traits = city.traits.map((t) => TRAIT_NAMES[t].toLowerCase());
   const frozenHours = Math.floor(state.clock.frozenMs / HOUR);
 
   return (
     <main className="mx-auto max-w-xl px-4 pb-[max(3rem,env(safe-area-inset-bottom))]">
       <ResourceStrip state={state} city={city} />
-      <header className="pt-5">
-        <h1 className="font-book text-[2.6rem] font-bold leading-none">{city.name}</h1>
-        <p className="mt-2 text-lichen">
-          {/^[aeiou]/.test(traits[0] ?? '') ? 'An' : 'A'} {traits.join(' and ')} site in the valley. <span className="num">{worldAge(state.clock.gameTime)}</span>
-          {frozenHours > 0 ? `, with ${frozenHours} hours spent standing still.` : '.'}
-        </p>
+      <header className="pt-6">
+        <h1 className="bg-gradient-to-br from-frost via-ice to-azure bg-clip-text pb-1 font-book text-[2.8rem] font-bold leading-none text-transparent">
+          {city.name}
+        </h1>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {city.traits.map((t) => (
+            <span key={t} className="rounded-full border border-azure/50 bg-azure/15 px-3 py-0.5 text-sm font-medium text-ice">
+              {TRAIT_NAMES[t]}
+            </span>
+          ))}
+          <span className="num text-sm text-muted">{worldAge(state.clock.gameTime)}</span>
+        </div>
+        {frozenHours > 0 && (
+          <p className="mt-2 text-sm text-muted">The valley has stood still for {frozenHours} hours in all.</p>
+        )}
       </header>
       <InstallHint />
       {snap.awayReport && (
@@ -585,7 +613,7 @@ export function App() {
       <Buildings city={city} />
       <Villagers city={city} />
       <Saves snap={snap} />
-      <p className="mt-10 text-sm text-lichen">
+      <p className="mt-10 text-sm text-muted">
         Valehalla, phase 0 test build. This page exists to prove the engine and the saves on your phone. The real game
         screens come next.
       </p>
